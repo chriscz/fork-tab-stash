@@ -33,6 +33,10 @@ const browserWakeEvents = {
   pageActionClicked: browser.pageAction
     ? deferredListener(browser.pageAction.onClicked)
     : undefined,
+  // Chrome (MV3) only: the service worker restarts too often for timers, so
+  // daily GC runs from an alarm.  Firefox's manifest doesn't request
+  // "alarms", so this is undefined there.
+  alarm: browser.alarms ? deferredListener(browser.alarms.onAlarm) : undefined,
 };
 
 logErrorsFrom(async () => {
@@ -456,6 +460,8 @@ logErrorsFrom(async () => {
   //
 
   logErrorsFrom(async () => {
+    // Nothing to close where tabs can't be hidden, so skip walking the stash.
+    if (!browser.tabs.hide) return;
     let managed_urls = await model.bookmarks.urlsInStash();
 
     const close_removed_bookmarks = backingOff(() =>
@@ -585,6 +591,22 @@ logErrorsFrom(async () => {
   // Needed to prevent Tab Stash from consuming an unbounded amount of the user's
   // local storage.
   //
+
+  // Keep this section last: on Chrome it returns before Firefox's GC code
+  // below.
+  if (browserWakeEvents.alarm) {
+    browserWakeEvents.alarm.handle(() => model.attempt(() => model.gc()));
+    // create() replaces an existing alarm and restarts its period, and this
+    // code runs on every wake, so only create it when it's missing.  The
+    // first GC comes a minute later, e.g. after a fresh install.
+    if (!(await browser.alarms.get("gc"))) {
+      await browser.alarms.create("gc", {
+        delayInMinutes: 1,
+        periodInMinutes: 24 * 60,
+      });
+    }
+    return;
+  }
 
   const gc = nonReentrant(() =>
     model.attempt(async () => {
