@@ -97,7 +97,6 @@ e2e/
 ```yaml
 id: E02
 title: Stash all open tabs
-clock: 2026-01-01T09:00:00Z # only in specs with screenshots, see section 2
 given:
   - Three local pages are open in the window, and the stash is empty.
 when:
@@ -105,26 +104,31 @@ when:
 then:
   - A new folder appears at the top of "Tab Stash" with the three pages, in tab order.
   - step: The stash list shows the new folder, expanded, with its three tabs.
-    screenshot: stash-list-after-stash
+    screenshot:
+      name: stash-list-after-stash
+      mask:
+        - div.forest-item.folder .forest-title # the folder's saved date and time
   - step: The three tabs are hidden and marked as hidden by Tab Stash.
     browser: firefox
   - step: The three tabs are closed.
     browser: chrome
   - The window still has one visible tab.
 notes: |
-  Folder names are "saved-<ISO time>"; assertions match the prefix. The clock
-  makes the screenshot's "Saved 1/1/2026, 9:00:00 AM" stable.
+  Folder names are "saved-<ISO time>"; assertions match the prefix, and the
+  screenshot masks the folder's title, which shows that date and time.
   Hidden tabs carry the session value hidden_by_tab_stash (src/model/tabs.ts).
   Mutation check: comment out tabs.hide() in model/tabs.ts -> step 3 fails.
 ```
 
 The format:
 
-- **Fields:** `id`, `title`, `given`, `when`, `then`, `notes`, and optionally `browser` and `clock`.
+- **Fields:** `id`, `title`, `given`, `when`, `then`, `notes`, and optionally `browser`.
 - **Steps.** Every `given`, `when` and `then` entry is a plain string, or an object with a `step` and any of these keys:
   - **`browser`** (`firefox` or `chrome`) limits the step to that browser. This is how a spec states browser differences, right where they happen. A step without it applies to both browsers. A top-level `browser` limits the whole test (e.g. E14, which needs hidden tabs).
-  - **`screenshot`** captures the page after the step and compares it with a golden. `screenshot: <name>` stores it as `<name>.png`. `screenshot: true` uses the step's position, `then-<n>.png`, counting every `then` step from 1 whatever its `browser`, so the name is the same in both browsers. Goldens are stored per browser, under `screenshots/<browser>/`.
-- **`clock`** pins the page's current date (`new Date()`) to that instant (see section 2). Only specs with screenshots set it.
+  - **`screenshot`** captures the page after the step and compares it with a golden. Goldens are stored per browser, under `screenshots/<browser>/`. The value is one of:
+    - `true`, which names the golden after the step's position, `then-<n>.png`, counting every `then` step from 1 whatever its `browser`, so the name is the same in both browsers;
+    - a file name, stored as `<name>.png`;
+    - an object `{name?, mask: [...]}`, where `name` works as above (default `then-<n>`) and `mask` lists regions to black out before comparing. Each entry is a CSS selector, which masks the bounding box of every matching element, or a rectangle `[x, y, w, h]` in CSS pixels of the 1000×700 viewport. Selectors follow layout changes, so prefer them; rectangles cover regions no selector targets cleanly. A selector that matches nothing is an error, so a mask can't silently stop working.
 - **`notes`** is free text for whoever writes or maintains the suite: variations, timing traps, fragile selectors, upstream bugs to avoid relying on, and the test's **mutation check**. That is a one-line change to Tab Stash that makes the test fail, so anyone can re-run it later.
 
 **`suite.cts` binds code to the spec's steps.** It supplies one function per step, keyed by the step's exact text, and nothing else. It has no ordering, no browser checks and no screenshot calls; the runner takes those from the spec. Each function checks its whole sentence:
@@ -197,17 +201,17 @@ Suites are TypeScript, run by Node's built-in test runner (`node:test`, `node:as
 
 **The driver** (`driver.cts`) is the only API suites use. It fills in what Puppeteer can't do in each browser, so suites never call BiDi, CDP or Firefox internals (`Services`, `gBrowser`) themselves:
 
-| Driver method                                                         | Firefox adapter                                                          | Chrome adapter                                         |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `open(page)` (the page may carry a query, e.g. `stash-list.html?q=x`) | raw BiDi `browsingContext.navigate` to the pinned `moz-extension://` URL | `page.goto("chrome-extension://<id>/…")`               |
-| `eval(js)`, `click(sel, mods?)`, `waitFor(js)`, `waitUntil(fn)`       | BiDi `script.evaluate` in the page                                       | `page.evaluate`, `page.click`, `page.waitForFunction`  |
-| `openPages(n)`, `pageUrls(n)`                                         | tabs on the local HTTP server                                            | same                                                   |
-| `stash()`, `tabs(query)`, `tabMarker(id)`, `seed(state)`              | the page's own `browser.bookmarks`/`tabs`/`sessions`/`storage`           | same, through `page.evaluate`                          |
-| `showAllFolders()`                                                    | scrolls each folder into view, so lazy children render (`load-more.vue`) | same                                                   |
-| `screenshot()`                                                        | `drawSnapshot` from the chrome context, encoded as PNG                   | `page.screenshot()`                                    |
-| `errors()`                                                            | Firefox's console service plus `error_log`                               | `pageerror` events plus `error_log`                    |
-| `restartBackground()` (Phase C, not built yet)                        | reloads the add-on (Open question 2)                                     | `WebWorker.close()`, then waits for the worker to wake |
-| the pinned date (the spec's `clock`, applied by `launch`)             | overrides `new Date()` in the page after each load (see below)           | `page.evaluateOnNewDocument`                           |
+| Driver method                                                         | Firefox adapter                                                                   | Chrome adapter                                         |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `open(page)` (the page may carry a query, e.g. `stash-list.html?q=x`) | raw BiDi `browsingContext.navigate` to the pinned `moz-extension://` URL          | `page.goto("chrome-extension://<id>/…")`               |
+| `eval(js)`, `click(sel, mods?)`, `waitFor(js)`, `waitUntil(fn)`       | BiDi `script.evaluate` in the page                                                | `page.evaluate`, `page.click`, `page.waitForFunction`  |
+| `openPages(n)`, `pageUrls(n)`                                         | tabs on the local HTTP server                                                     | same                                                   |
+| `stash()`, `tabs(query)`, `tabMarker(id)`, `seed(state)`              | the page's own `browser.bookmarks`/`tabs`/`sessions`/`storage`                    | same, through `page.evaluate`                          |
+| `showAllFolders()`                                                    | scrolls each folder into view, so lazy children render (`load-more.vue`)          | same                                                   |
+| `screenshot()`                                                        | `drawSnapshot` from the chrome context, encoded as PNG                            | `page.screenshot()`                                    |
+| `errors()`                                                            | Firefox's console service plus `error_log`                                        | `pageerror` events plus `error_log`                    |
+| `restartBackground()` (Phase C, not built yet)                        | reloads the add-on (Open question 2)                                              | `WebWorker.close()`, then waits for the worker to wake |
+| `screenshot({mask})`: masks before capture                            | overlays fixed-position black boxes on the masked regions, captures, removes them | same                                                   |
 
 **Shared setup** (`fixtures.cts`). Common `given` steps live here as named functions: `threeOpenPages`, and `stashedThreePages` ("after E2"). Specs that start "after E2" bind to the fixture rather than depend on another test, so every test still runs on its own in a fresh browser.
 
@@ -225,35 +229,32 @@ Tests about hiding tabs keep the default `after_stashing_tab: "hide"`.
 - **Fixed locale and timezone:** `TZ=UTC` and `intl.locale.requested=en-US` (Firefox) or `--lang=en-US` (Chrome).
 - **Pinned rendering:** the browsers and fonts are pinned in the image.
 - **Settle wait:** a short wait before each capture.
-- **A pinned date,** for specs that set `clock`. The driver makes `new Date()` with no arguments return that instant, so dates Tab Stash creates, such as folder names (`Saved 1/1/2026, 9:00:00 AM`), render the same on every run.
-  - **`Date.now()` keeps running.** Tab Stash times its own waits with it, e.g. a 20 ms loop when it creates the stash folder (`src/model/bookmarks.ts:616`). Freezing it deadlocked the stash in Phase A, so only the current date is pinned. Anything Tab Stash stamps with `Date.now()` still gets the real time.
-  - **Page only.** The date is pinned in the page only. Bookmarks' `dateAdded` still comes from the browser's real clock, so the clock stays off in specs whose behaviour compares the two, such as E3's "folder under 5 minutes old".
-  - **Installing it early.** Chrome installs the pin before the page's scripts run. Firefox has no preload hook for extension pages, so the Firefox adapter installs it right after each load. Phase A showed that this is enough when the dated item is created after load (E02), but not for dates a page computes at first render, such as Deleted Items' day headers (Open question 1).
+- **Masked regions** for anything that shows a time or date. Tab Stash renders the current date and time in places such as folder names (`Saved 10/13/2026, 2:04:31 PM`) and Deleted Items' day headers. Specs mask those regions rather than control the clock, so the real clock runs everywhere. The driver overlays the masks in the page itself, so it works the same in every browser and needs no image library.
 
 ### 3. The test catalogue
 
 Each row seeds one `spec.yml`. Once the spec exists, the spec is the authority and this table is only an index. "Expected on Chrome" lists what RFC 0001 will need to verify, written as Chrome steps; "identical" means the same assertions apply.
 
-| ID  | Scenario                                          | Action (page UI)                                                                                   | Assertions (Firefox)                                                                                                                                                                    | Expected on Chrome (unverified)                             |
-| --- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| E1  | Extension installs and the stash list starts      | open `stash-list.html`                                                                             | `main.stash-list` renders; no errors (exists today)                                                                                                                                     | identical                                                   |
-| E2  | Stash all open tabs                               | open 3 local pages; click "stash all" in the open-tabs toolbar                                     | a new `saved-…` folder at index 0 of "Tab Stash" with the 3 URLs in tab order; the 3 tabs are hidden with the `hidden_by_tab_stash` marker; one visible tab remains; screenshot (clock) | the 3 tabs are closed; the rest identical                   |
-| E3  | Stash one tab, twice                              | click "stash one" on two tab rows (scoped to the open-tabs list)                                   | both bookmarks land in the same default folder, because it's under 5 minutes old (`new_folder_timeout_min`); no clock                                                                   | the 2 tabs are closed; the rest identical                   |
-| E4  | Copy keeps tabs open                              | Alt-click "stash all"                                                                              | folder created; the original tabs are still visible and unmarked                                                                                                                        | identical                                                   |
-| E5  | Restore one bookmark reuses its hidden tab        | `given.stashedThreePages`; click a bookmark's `a.forest-title`                                     | the hidden tab is shown again (same tab id, not a new tab); its marker is removed; the bookmark remains                                                                                 | a new tab opens with that URL; the bookmark remains         |
-| E6  | Restore a folder                                  | click the folder's restore action                                                                  | all URLs are open and visible; an already-open URL is activated, not duplicated; the bookmarks remain; screenshot (clock)                                                               | new tabs open; the rest identical                           |
-| E7  | Restore and remove                                | click the folder's restore-and-remove action                                                       | tabs open; the folder is gone from "Tab Stash"; it is listed on `deleted-items.html`                                                                                                    | identical                                                   |
-| E8  | Delete a bookmark, then undo                      | click a bookmark's remove action, then the undo notification                                       | the bookmark disappears, then returns to its original folder (undo appends it at the end: upstream promises only "approximately the same place")                                        | identical                                                   |
-| E9  | Delete a folder, restore it from Deleted Items    | "Delete Group" in the folder menu; open `deleted-items.html`; click Restore                        | Deleted Items lists the folder (screenshot, clock); after Restore the folder and its bookmarks are back and the entry is gone                                                           | identical                                                   |
-| E10 | Deleted items survive a background restart        | delete a folder; `restartBackground()`                                                             | `deleted-items.html` still lists it (IndexedDB persistence)                                                                                                                             | identical, via a service-worker stop                        |
-| E11 | Rename a folder                                   | click the folder title, type, press Enter                                                          | the bookmark folder's title has changed                                                                                                                                                 | identical                                                   |
-| E12 | Stashing a duplicate URL moves it                 | seed a folder with URL X; stash a tab with URL X into it                                           | still exactly one bookmark for X                                                                                                                                                        | identical                                                   |
-| E13 | Search filters the stash                          | open `stash-list.html?q=<term>`                                                                    | only matching folders and bookmarks are shown; the others are hidden or marked `.no-match`; screenshot (seeded data)                                                                    | identical                                                   |
-| E14 | Removing a stashed bookmark closes its hidden tab | `given.stashedThreePages`; remove one bookmark with `browser.bookmarks.remove` (as in the Library) | the matching hidden tab is closed by the background's bookmark-removal listener (`src/index.ts`, `close_removed_bookmarks`)                                                             | not applicable: whole spec is `browser: firefox`            |
-| E15 | Pinned tabs are left alone                        | pin a tab; stash all; then repeat with `stash_include_pinned`                                      | the pinned tab is skipped, then included                                                                                                                                                | included tabs are closed; the rest identical                |
-| E16 | Privileged URLs restore through the redirect page | seed a bookmark for `about:robots`; restore it                                                     | a tab opens at `restore.html?url=about%3Arobots`                                                                                                                                        | identical for `about:`; a `chrome:` URL would open directly |
-| E17 | Options persist                                   | select `#after_stashing_tab_close` on `options.html`; reload the page                              | the radio is still selected; `storage.local` has the value; the next stash closes tabs                                                                                                  | identical                                                   |
-| E18 | Alternative views render                          | open `stash-list.html?view=popup` and `?view=sidebar`                                              | each renders with `html[data-view]` set and no errors; screenshot (seeded data)                                                                                                         | popup view only                                             |
+| ID  | Scenario                                          | Action (page UI)                                                                                   | Assertions (Firefox)                                                                                                                                                                          | Expected on Chrome (unverified)                             |
+| --- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| E1  | Extension installs and the stash list starts      | open `stash-list.html`                                                                             | `main.stash-list` renders; no errors (exists today)                                                                                                                                           | identical                                                   |
+| E2  | Stash all open tabs                               | open 3 local pages; click "stash all" in the open-tabs toolbar                                     | a new `saved-…` folder at index 0 of "Tab Stash" with the 3 URLs in tab order; the 3 tabs are hidden with the `hidden_by_tab_stash` marker; one visible tab remains; screenshot (time masked) | the 3 tabs are closed; the rest identical                   |
+| E3  | Stash one tab, twice                              | click "stash one" on two tab rows (scoped to the open-tabs list)                                   | both bookmarks land in the same default folder, because it's under 5 minutes old (`new_folder_timeout_min`)                                                                                   | the 2 tabs are closed; the rest identical                   |
+| E4  | Copy keeps tabs open                              | Alt-click "stash all"                                                                              | folder created; the original tabs are still visible and unmarked                                                                                                                              | identical                                                   |
+| E5  | Restore one bookmark reuses its hidden tab        | `given.stashedThreePages`; click a bookmark's `a.forest-title`                                     | the hidden tab is shown again (same tab id, not a new tab); its marker is removed; the bookmark remains                                                                                       | a new tab opens with that URL; the bookmark remains         |
+| E6  | Restore a folder                                  | click the folder's restore action                                                                  | all URLs are open and visible; an already-open URL is activated, not duplicated; the bookmarks remain; screenshot (time masked)                                                               | new tabs open; the rest identical                           |
+| E7  | Restore and remove                                | click the folder's restore-and-remove action                                                       | tabs open; the folder is gone from "Tab Stash"; it is listed on `deleted-items.html`                                                                                                          | identical                                                   |
+| E8  | Delete a bookmark, then undo                      | click a bookmark's remove action, then the undo notification                                       | the bookmark disappears, then returns to its original folder (undo appends it at the end: upstream promises only "approximately the same place")                                              | identical                                                   |
+| E9  | Delete a folder, restore it from Deleted Items    | "Delete Group" in the folder menu; open `deleted-items.html`; click Restore                        | Deleted Items lists the folder (screenshot, header date masked); after Restore the folder and its bookmarks are back and the entry is gone                                                    | identical                                                   |
+| E10 | Deleted items survive a background restart        | delete a folder; `restartBackground()`                                                             | `deleted-items.html` still lists it (IndexedDB persistence)                                                                                                                                   | identical, via a service-worker stop                        |
+| E11 | Rename a folder                                   | click the folder title, type, press Enter                                                          | the bookmark folder's title has changed                                                                                                                                                       | identical                                                   |
+| E12 | Stashing a duplicate URL moves it                 | seed a folder with URL X; stash a tab with URL X into it                                           | still exactly one bookmark for X                                                                                                                                                              | identical                                                   |
+| E13 | Search filters the stash                          | open `stash-list.html?q=<term>`                                                                    | only matching folders and bookmarks are shown; the others are hidden or marked `.no-match`; screenshot (seeded data)                                                                          | identical                                                   |
+| E14 | Removing a stashed bookmark closes its hidden tab | `given.stashedThreePages`; remove one bookmark with `browser.bookmarks.remove` (as in the Library) | the matching hidden tab is closed by the background's bookmark-removal listener (`src/index.ts`, `close_removed_bookmarks`)                                                                   | not applicable: whole spec is `browser: firefox`            |
+| E15 | Pinned tabs are left alone                        | pin a tab; stash all; then repeat with `stash_include_pinned`                                      | the pinned tab is skipped, then included                                                                                                                                                      | included tabs are closed; the rest identical                |
+| E16 | Privileged URLs restore through the redirect page | seed a bookmark for `about:robots`; restore it                                                     | a tab opens at `restore.html?url=about%3Arobots`                                                                                                                                              | identical for `about:`; a `chrome:` URL would open directly |
+| E17 | Options persist                                   | select `#after_stashing_tab_close` on `options.html`; reload the page                              | the radio is still selected; `storage.local` has the value; the next stash closes tabs                                                                                                        | identical                                                   |
+| E18 | Alternative views render                          | open `stash-list.html?view=popup` and `?view=sidebar`                                              | each renders with `html[data-view]` set and no errors; screenshot (seeded data)                                                                                                               | popup view only                                             |
 
 ### 4. Rules every test follows
 
@@ -333,7 +334,7 @@ check-e2e-ref:
 **Plain `node:test` titles, with no YAML.** `describe("E02 Stash all open tabs")` with `test("then: the three tabs are hidden …")` costs nothing: no parser, no runner, and no sentence written twice. It lost on two counts:
 
 - **No standalone spec.** The scenario would exist only inside code, and you'd want a structured, readable spec as the source that a person or an AI agent can review without reading TypeScript.
-- **No machine-read structure.** `browser`, `screenshot` and `clock` would become ad-hoc `if`s in every suite instead of keys the runner acts on.
+- **No machine-read structure.** `browser` and `screenshot` (with its masks) would become ad-hoc `if`s in every suite instead of keys the runner acts on.
 
 The cost we accept is each step's sentence appearing twice, once in the YAML and once as a key in the suite. `CLAUDE.md` prefers generating derived files to duplicating them; the runner's exact-match check is what keeps that duplication safe.
 
@@ -347,7 +348,9 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
 
 **Screenshots as the only baseline.** Pure visual regression is quick to set up, but it can't see browser state: hidden tabs, bookmark contents and storage don't show on the page.
 
-**A screenshot diff with a tolerance** (e.g. `pixelmatch`). It's more forgiving of anti-aliasing, but it adds a dependency and a threshold to tune. It also can't fix the real source of instability, which is text (timestamps), not pixels. That is solved by the clock and locale.
+**A screenshot diff with a tolerance** (e.g. `pixelmatch`). It's more forgiving of anti-aliasing, but it adds a dependency and a threshold to tune. It also can't fix the real source of instability, which is text (timestamps), not pixels. Masks handle that.
+
+**Controlling the clock instead of masking.** Phase A first froze `Date` in the page. That deadlocked Tab Stash, which times a 20 ms wait with `Date.now()` when it creates the stash folder (`src/model/bookmarks.ts:616`). A pin of only `new Date()` worked for E02, but it covered the page only and was installed after load, so Deleted Items' first-render headers escaped it. A system-level clock via libfaketime (`LD_PRELOAD`) would have covered everything. But Firefox 157 deadlocks in its first memory allocation under it, before it starts, with every option tried. Masks need neither.
 
 **Selenium or WebdriverIO with geckodriver for Firefox.** These can install add-ons, but they hit the same BiDi limitation on extension pages, and they'd add a second driver next to Puppeteer. Puppeteer already installs the extension in Firefox (`browser.installExtension`, which sends BiDi's `webExtension.install`).
 
@@ -366,7 +369,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
   - Toolbars are hidden until hover (`styles/forest.less:62`). `el.click()` still works, but visibility can't be asserted.
   - An upstream UI refactor could break many tests at once. `data-test` attributes would fix this, but they touch upstream UI code (Open question 3).
 - **Timing.** Folders render their children on intersection, search waits 250 ms, and the undo notification lasts 8 seconds. The driver polls with bounded waits. The three-run rule catches flakiness, at the cost of runtime.
-- **The pinned date is partial.** It covers `new Date()` in the page only. `Date.now()` and browser timestamps stay real, so views showing times stamped from those can't be screenshotted deterministically. Specs that compare page time with browser timestamps can't use it either. Firefox may also not allow installing it before the first render (Open question 1).
+- **Masked regions aren't checked.** A bug that only shows in a masked area, such as a wrong date format, passes the screenshot. State assertions still cover the data. Masks are kept to the smallest region that shows a time or date, preferably by selector.
 - **Goldens churn and add binaries.** An intentional UI change invalidates the affected goldens, which then need regenerating and reviewing. So does a version bump, because the stash list's footer shows the version. Each PNG is about 15–20 KB.
 - **Goldens are tied to the machine type.** Byte-for-byte goldens depend on software rendering and the Firefox build, so goldens made on x86_64 won't match an arm64 host, such as Colima on Apple silicon. Goldens are generated on x86_64. Running screenshot steps elsewhere needs its own goldens or a tolerance (Open questions).
 - **Each sentence is written twice,** once in YAML and once in the suite. The runner catches mismatches, but rewording a step means editing two files.
@@ -384,7 +387,6 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
   - `bin/e2e`, and the `check-e2e-firefox` and `check-e2e-ref` changes;
   - specs and suites for E1 (the smoke test, moved), E2 and E8, with E2's goldens generated from the baseline.
 - **Proofs needed in this phase:**
-  - Can the pinned date be installed before Firefox renders (Open question 1)?
   - Do exact screenshot matches hold across runs?
   - Does `js-yaml` resolve from `.cts` files?
   - Test time per test, measured to check the budget.
@@ -413,7 +415,7 @@ Recorded on 2026-10-13 at commit `d1aa9a0`.
 - **Neutral suites:** `grep -rE "connection\.send|Services\.|gBrowser" e2e/tests` finds nothing.
 - **Speed:** test time was 8.0–8.6 s per run. `node --test` runs each spec file in its own process, concurrently, so the three specs took about as long as the slowest one. Even run one at a time, at roughly 3 s per spec (Firefox start, install, steps), 18 specs come to about a minute, well inside the five-minute budget.
 - **What Phase A changed in the design:**
-  - **The clock pins only `new Date()`.** Freezing `Date.now()` deadlocked Tab Stash's 20 ms wait when it creates the stash folder.
+  - **The clock pinned only `new Date()`.** Freezing `Date.now()` deadlocked Tab Stash's 20 ms wait when it creates the stash folder. After Phase A, masks replaced the clock altogether (Open question 1).
   - **The driver waits before seeding.** It waits for the background to record its version, because a fresh install rewrites the local options.
   - **E8 checks the folder, not the position.** Undo appends the bookmark to its folder (`622bf3d` does too).
   - **The reference build is cached per commit hash,** with a completion marker.
@@ -453,7 +455,10 @@ Recorded on 2026-10-13 at commit `d1aa9a0`.
 
 ## Open questions
 
-1. **Can the Firefox adapter pin the date before an extension page first renders?** _Narrowed in Phase A._ Pinning after load is enough when the page creates the dated item after load, which was E02's case. It is not enough for Deleted Items (E9): its stored times come from `new Date()` and so are pinned, but its day headers are computed at first render. E9 therefore needs either a pin before render or a re-render after pinning. _Resolve in Phase B_, or drop E9's screenshot.
+1. **How should screenshots handle dates and times?** _Resolved after Phase A_ by a spike:
+   - **Masks alone work.** E02 with a masked folder title matched byte for byte in 6 of 6 runs across the baseline and our branch. Deleted Items, with its header date masked, matched in 3 of 3.
+   - **The other options failed.** libfaketime stops Firefox from starting, and the in-page pin missed first-render dates.
+   - **So screenshots mask times,** and the clock is left alone.
 2. **Can the Firefox adapter restart the background reliably?** That's needed for E10: `browser.runtime.reload()` from a page under BiDi's temporary install, or a reinstall that keeps the profile. _Resolve in Phase C_, with the E10 fallback.
 3. **Should the suite add `data-test` attributes upstream to make selectors less fragile?** _Defer_ until selector breakage is a real cost, since it touches upstream UI code.
 4. **Do synthetic `MouseEvent`s with `altKey` reach the Vue handlers the same way real clicks do (E4)?** _Resolve in Phase B_, with the mutation check.
