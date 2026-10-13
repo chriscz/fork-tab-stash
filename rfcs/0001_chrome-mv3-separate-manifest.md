@@ -369,6 +369,12 @@ Each of these is gated so that Firefox's MV2 build never runs it:
 
 **Phase 3: Chrome functional and restart testing.**
 
+- **Automated parity run.** The end-to-end suite from [RFC 0002](0002_firefox-baseline-e2e-suite.md) runs on the Chrome build through a Chrome adapter (Puppeteer), with the same specs and suites. Each spec's `browser: chrome` steps, unverified until now, become real checks. The results go in a parity table in this RFC, one row per spec.
+  - **Harness changes come first.** They must stay neutral on Firefox. For example, Chrome rejects `hidden` in `tabs.query` ("Unexpected property"), so the driver filters on it itself, and it reports a tab as unmarked where `sessions.getTabValue` doesn't exist.
+  - **Restarts are tested for real.** The adapter's `restartBackground()` stops the service worker, so E10 checks Goal 5.
+  - **Triage.** A failure caused by the test or harness is fixed in the suite. A failure caused by the extension is fixed in the extension, in this RFC's stack. A failure that needs architectural change goes to a further RFC (below).
+  - **No upstream reference.** Upstream has no Chrome build that loads (it's MV2), so the Firefox rule that every test first passes on upstream can't apply. Chrome results are trusted through the shared steps, already proven on upstream with Firefox; a mutation check for each Chrome-only step; and a human review of each Chrome screenshot before it becomes a golden. Chrome goldens are generated from a pinned commit of this fork.
+  - **Not covered.** The real toolbar popup closing mid-operation, the context menus and the toolbar button aren't reachable from the suite, so they stay manual checks below.
 - **Cold-start check:** with a fresh profile, every Goal 1 item works.
 - **Restart check:** stop the worker by hand (the "service worker" link on `chrome://extensions`, then _Stop_ in DevTools). Then confirm each of these works on the first try:
   - the toolbar button, in normal and popup mode;
@@ -388,6 +394,7 @@ Phases 1–3 are separate PRs. If Phase 2 or 3 stalls, Phase 1 still stands, bec
 - **Firefox:** `assets/manifest.json` is unchanged, and the Phase 1 Firefox checklist passes.
 - **Chrome loads:** `make build-chrome-dbg` produces an extension that current stable Chrome loads without errors, with a visible toolbar icon.
 - **Chrome works:** every Goal 1 item works in Chrome, both from a cold start and after a forced worker stop.
+- **Suite parity:** every RFC 0002 spec that applies to Chrome passes on the Chrome build, three consecutive runs, and the Firefox suite still passes on both upstream and our branch.
 - **GC:** the `gc` alarm exists and its `scheduledTime` does not move across worker stops.
 - **Generated manifest:** `dist-chrome/manifest.json` is generated from `assets/manifest.json`, with no second manifest file in the repository.
 - **Latency:** cold wake-to-action latency is recorded in this RFC. Phase 0 gates on 1 second; no bound is promised after that.
@@ -476,3 +483,4 @@ Code references are to commit `6df8b7f` on branch `chore/chriscz`:
 ## History
 
 - 2026-10-13 — draft
+- 2026-10-14 — Phase 3 runs the RFC 0002 suite on Chrome
