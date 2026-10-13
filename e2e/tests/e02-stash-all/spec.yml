@@ -1,0 +1,22 @@
+id: E02
+title: Stash all open tabs
+given:
+  - Three local pages are open in the window, and the stash is empty.
+when:
+  - The user clicks "Stash all" in the open-tabs section of the stash list.
+then:
+  - A new folder appears at the top of "Tab Stash" with the three pages, in tab order.
+  - step: The three tabs are hidden and marked as hidden by Tab Stash.
+    browser: firefox
+  - step: The three tabs are closed.
+    browser: chrome
+  - The window still has one visible tab.
+notes: |
+  The stash starts empty, so the new folder is the only one (hence "at the top").
+  Folder names are "saved-<ISO time>"; assertions match the prefix.
+  The stash list's own tab isn't stashable, so it is the visible tab left.
+  "Stash all" is the only link with class exactly "action stash"
+  (src/stash-list/window.vue); a.action.stash alone matches a dozen links.
+  Hidden tabs carry the session value hidden_by_tab_stash.
+  Mutation check: in src/model/tabs.ts, make hide() return before calling
+  browser.tabs.hide; the "hidden and marked" step fails.
