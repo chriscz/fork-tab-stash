@@ -443,7 +443,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
 - **E14 was deferred** (it lands in Phase D). It fails on upstream `622bf3d`: the background snapshots the stash's URLs at startup and refreshes them on bookmark change, move and remove, but not on create. A page stashed after startup is never in the snapshot, so removing its bookmark closes nothing. Making E14 pass would mean a `given` step that leans on the bug (e.g. renaming a bookmark first). The bug is in `TASKS.md`; E14 lands once the fix does, and it then serves as the fix's regression test.
 - **Exit criteria:** the same as Phase A, and the whole suite's test time is under five minutes.
 
-**Phase D: fixing the upstream bugs in `TASKS.md`.** Each bug is fixed in its own commit, marked `[pre-existing]` in the subject, with a test: a spec marked `upstream-bug` when the fix changes what the user sees (E04 gains a full check of the copied folder, E14 lands, E22 and E23 are new), or a unit regression test when it doesn't. The runner learns `upstream-bug` first.
+**Phase D: fixing the upstream bugs in `TASKS.md`.** Each bug is fixed in its own commit, with `[pre-existing]` at the end of its subject, with a test: a spec marked `upstream-bug` when the fix changes what the user sees (E04 gains a full check of the copied folder, E14 lands, E22 and E23 are new), or a unit regression test when it doesn't. The runner learns `upstream-bug` first.
 
 - **Exit criteria:** the same as Phase A, except that `upstream-bug` specs run as todo on the baseline, and each one's notes record the step that fails there.
 

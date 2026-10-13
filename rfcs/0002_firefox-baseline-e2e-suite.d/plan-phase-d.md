@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Subjects:** every fix of a bug that exists on upstream `622bf3d` has `[pre-existing]` right after the scope: `fix(rfc-0002): [pre-existing] …` (or `test(rfc-0002): [pre-existing] …` for a test-only fix). Other commits use `test(rfc-0002): …` / `docs(rfc-0002): …`. Every commit ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Subjects:** every fix of a bug that exists on upstream `622bf3d` ends with `[pre-existing]`: `fix(rfc-0002): … [pre-existing]` (or `test(rfc-0002): … [pre-existing]` for a test-only fix). Other commits use `test(rfc-0002): …` / `docs(rfc-0002): …`. Every commit ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - **Tests:** a fix that changes what the user sees comes with an e2e spec (new, or an existing one extended) carrying `upstream-bug: <TASKS.md heading>`. A fix with no visible effect comes with a unit regression test. The test fails without the fix (verify by reverting the fix) and passes with it.
 - **Each fix commit** also moves its `TASKS.md` entry from "Open bugs" to "Fixed in this fork", with `Fix:` describing the change (the commit's own SHA can't be named in itself; say "this commit's fix" or leave the SHA for Task 7).
 - **Fix at the source,** minimally, in the style of the surrounding code. Firefox and Chrome behaviour change only where the bug was.
@@ -28,11 +28,11 @@
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0    | `docs(rfc-0002): add Phase D, specs for the upstream bugs this fork fixes` (done, `f4bfbd0`) and `docs(rfc-0002): add the Phase D plan` (this file) |
 | 1    | `test(rfc-0002): run upstream-bug specs as todo on reference builds`                                                                                |
-| 2    | `test(rfc-0002): [pre-existing] make the deleted-items filter test deterministic`                                                                   |
-| 3    | `fix(rfc-0002): [pre-existing] don't copy the Tab Stash page when copying all tabs`                                                                 |
-| 4    | `fix(rfc-0002): [pre-existing] close hidden tabs of bookmarks stashed since startup`                                                                |
-| 5    | `fix(rfc-0002): [pre-existing] make the options page's coupling watchers fire`                                                                      |
-| 6    | `fix(rfc-0002): [pre-existing] don't open the sidebar when showing the popup`                                                                       |
+| 2    | `test(rfc-0002): make the deleted-items filter test deterministic [pre-existing]`                                                                   |
+| 3    | `fix(rfc-0002): don't copy the Tab Stash page when copying all tabs [pre-existing]`                                                                 |
+| 4    | `fix(rfc-0002): close hidden tabs of bookmarks stashed since startup [pre-existing]`                                                                |
+| 5    | `fix(rfc-0002): make the options page's coupling watchers fire [pre-existing]`                                                                      |
+| 6    | `fix(rfc-0002): don't open the sidebar when showing the popup [pre-existing]`                                                                       |
 | 7    | `docs(rfc-0002): record the Phase D results`                                                                                                        |
 
 ---
@@ -73,7 +73,7 @@ Subtests inherit nothing from `todo`, so check how node:test reports a failing s
 - [ ] **Step 1:** In `src/model/deleted-items.test.ts` "only loads new items that match the applied filter", make sure at least one matching item exists regardless of the random data, e.g. add one known item whose title contains "cat" through the same source before loading (use the model's existing add API, as other tests in the file do), and keep the random 50. Don't change `makeFakeData_testonly` unless seeding is clearly simpler.
 - [ ] **Step 2:** Prove it: temporarily force the random titles to contain no "cat" (e.g. a local edit of the word list, reverted afterwards); the old test fails, the new one passes.
 - [ ] **Step 3:** Move the `TASKS.md` entry to "Fixed in this fork".
-- [ ] **Step 4:** `bin/dev run make` exits 0. Commit `test(rfc-0002): [pre-existing] make the deleted-items filter test deterministic`.
+- [ ] **Step 4:** `bin/dev run make` exits 0. Commit `test(rfc-0002): make the deleted-items filter test deterministic [pre-existing]`.
 
 ---
 

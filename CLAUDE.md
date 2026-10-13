@@ -56,6 +56,11 @@ Changes should be minimally intrusive and build on what is already there.
   `feat(rfc-0001): register background listeners synchronously` or
   `docs(rfc-0001): update proposal after review`. This shows which RFC each
   commit serves.
+- A fix for a bug that already existed upstream ends its subject with
+  `[pre-existing]`, e.g.
+  `fix(rfc-0002): close hidden tabs of newly stashed bookmarks [pre-existing]`.
+  If the fix changes what the user sees, it comes with an end-to-end test;
+  otherwise a unit regression test.
 - Build commits as a Gerrit-style stack: each commit is one coherent change that
   builds, passes `make`, and delivers value on its own. Order the stack so any
   prefix of it could land without the rest.
