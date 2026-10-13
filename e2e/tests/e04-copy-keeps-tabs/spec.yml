@@ -1,0 +1,21 @@
+id: E04
+title: Copying keeps tabs open
+given:
+  - Three local pages are open in the window, and the stash is empty.
+when:
+  - The user Alt-clicks "Stash all" in the open-tabs section of the stash list.
+then:
+  - A new folder in "Tab Stash" holds the three pages, in tab order.
+  - The three tabs are still visible and not marked as hidden by Tab Stash.
+notes: |
+  Alt makes "Stash all" copy instead of move (window.vue).
+  Copying also puts the Tab Stash page itself into the folder (copying() skips
+  the isURLStashable check), which is a bug, so the folder step looks only at
+  the three local pages and their order, and does not assert the folder's
+  full contents.
+  tabMarker uses sessions.getTabValue, which Chrome lacks; the last step
+  treats a failing lookup as "unmarked" so it stays valid on Chrome.
+  Firefox's tabs.query url option matches nothing for URLs with a port, so the
+  suite filters tabs by URL itself.
+  Mutation check: in src/stash-list/window.vue's stash handler, ignore the
+  Alt key so it never copies; the "still visible" step fails.

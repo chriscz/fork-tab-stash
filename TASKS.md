@@ -34,6 +34,20 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   the model state directly), then check each coupling still makes sense.
 - **Status:** open, not reported.
 
+### Alt-clicking "Stash all" copies the Tab Stash page too
+
+- **Where:** `copying()` in `src/model/index.ts`, used by `stash()` in
+  `src/stash-list/window.vue`.
+- **What:** `copying()` turns each tab into a plain `{title, url}`, which skips
+  the `isURLStashable()` check that a move applies, so the Tab Stash page's own
+  tab is copied too.
+- **Effect:** copying all open tabs adds a `stash-list.html` bookmark to the
+  new folder; moving them doesn't.
+- **Found:** writing the end-to-end spec for copying (E4), 2026-10-13. Seen on
+  622bf3d in Firefox.
+- **Fix:** filter the tabs with `isURLStashable()` before copying.
+- **Status:** open, not reported.
+
 ## Fixed in this fork
 
 ### Chrome rejects dotted plural message keys
