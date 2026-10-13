@@ -32,17 +32,19 @@ function startPageServer(): Promise<any> {
   );
 }
 
-// Freezes Date in the page at `iso`, so generated folder names and dates render
-// the same on every run.  It covers the page only: bookmarks' dateAdded still
-// comes from the browser's real clock.  It is installed after the page has
-// loaded, so dates computed during the page's first render use the real clock.
+// Pins the page's current date (no-argument `new Date()`) at `iso`, so the
+// names Tab Stash generates from it, like new folders' names, render the same
+// on every run.  Date.now() keeps running, because Tab Stash times its own
+// waits with it (e.g. src/model/bookmarks.ts:616) and they never end on a
+// frozen clock.  It covers the page only: bookmarks' dateAdded still comes from
+// the browser's real clock.  It is installed after the page has loaded, so
+// dates computed during the page's first render use the real clock.
 const clockJs = (iso: string) => `(() => {
   if (globalThis.__e2eClock) return;
   const T = Date.parse(${JSON.stringify(iso)});
   const Real = Date;
   class FrozenDate extends Real {
     constructor(...a) { if (a.length === 0) super(T); else super(...a); }
-    static now() { return T; }
   }
   globalThis.Date = FrozenDate;
   globalThis.__e2eClock = true;

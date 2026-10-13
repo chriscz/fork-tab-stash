@@ -1,11 +1,14 @@
 id: E02
 title: Stash all open tabs
+clock: 2026-01-01T09:00:00Z
 given:
   - Three local pages are open in the window, and the stash is empty.
 when:
   - The user clicks "Stash all" in the open-tabs section of the stash list.
 then:
   - A new folder appears at the top of "Tab Stash" with the three pages, in tab order.
+  - step: The stash list shows the new folder, expanded, with its three tabs.
+    screenshot: stash-list-after-stash
   - step: The three tabs are hidden and marked as hidden by Tab Stash.
     browser: firefox
   - step: The three tabs are closed.
@@ -20,3 +23,6 @@ notes: |
   Hidden tabs carry the session value hidden_by_tab_stash.
   Mutation check: in src/model/tabs.ts, make hide() return before calling
   browser.tabs.hide; the "hidden and marked" step fails.
+  The clock makes the folder's displayed name ("Saved 1/1/2026, 9:00:00 AM")
+  the same on every run; the folder is created after the clock is set, so
+  freezing it once the page has loaded is enough here.

@@ -30,6 +30,11 @@ module.exports = steps(__dirname, {
       assert.deepEqual(folder.urls, h.pageUrls(3));
     },
 
+  "The stash list shows the new folder, expanded, with its three tabs.":
+    async h => {
+      await h.showAllFolders(); // the runner takes and compares the screenshot after this
+    },
+
   "The three tabs are hidden and marked as hidden by Tab Stash.": async h => {
     await h.waitFor(
       `browser.tabs.query({currentWindow: true, hidden: true}).then(t => t.length === 3)`,
