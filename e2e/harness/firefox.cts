@@ -3,9 +3,10 @@
 // events for them and runs no preload scripts there, so Puppeteer's page API
 // doesn't work.  This adapter navigates and evaluates with raw BiDi commands,
 // snapshots tabs from the chrome (browser UI) context because BiDi refuses to
-// screenshot privileged pages, and reads errors from Firefox's console
-// service.  --remote-allow-system-access is what allows the last two and
-// navigation to moz-extension:// URLs.
+// screenshot privileged pages, reads errors from Firefox's console service,
+// and restarts the add-on through its add-on manager.
+// --remote-allow-system-access is what allows the last three and navigation
+// to moz-extension:// URLs.
 
 const puppeteer = require("puppeteer");
 
@@ -125,6 +126,32 @@ async function launchAdapter({dist}: {dist: string}) {
               && m.sourceName.startsWith(${JSON.stringify(BASE_URL)}))
             .map(m => m.sourceName + ": " + m.errorMessage))`,
         ),
+      );
+    },
+
+    // Restarts the extension's background by reloading the add-on, which
+    // keeps the profile and so its storage and IndexedDB.  Firefox closes an
+    // add-on's tabs when it unloads, and closing the only tab would close the
+    // browser, so the test's tab leaves the extension first; the driver
+    // reopens its page.  The reload goes through the add-on manager rather
+    // than browser.runtime.reload(), which would need an extension page left
+    // open to call it and returns before the add-on is back.
+    async restartBackground() {
+      await bidi("browsingContext.navigate", {
+        context,
+        url: "about:blank",
+        wait: "complete",
+      });
+      openedUrl = "";
+      await evaluateIn(
+        await chromeContext(),
+        `(async () => {
+          const {AddonManager} = ChromeUtils.importESModule(
+            "resource://gre/modules/AddonManager.sys.mjs");
+          const addon = await AddonManager.getAddonByID(${JSON.stringify(ADDON_ID)});
+          await addon.reload();
+          return true;
+        })()`,
       );
     },
 

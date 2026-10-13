@@ -391,6 +391,26 @@ class Driver {
     }
   }
 
+  // Restarts the extension's background (Firefox reloads the add-on), then
+  // reopens the current page.  The page may not load while the extension is
+  // still coming back, so each attempt reopens it and gives it a few seconds
+  // to finish starting up; reopening sooner would cut its startup short.
+  async restartBackground(): Promise<void> {
+    await this.adapter.restartBackground();
+    await this.waitUntil(async () => {
+      try {
+        await this.open(this.page);
+        return await this.waitFor(
+          `!!globalThis.the?.model`,
+          "the page to start up",
+          5000,
+        );
+      } catch {
+        return false;
+      }
+    }, "the extension to come back after restarting its background");
+  }
+
   // Errors from the browser's console plus those Tab Stash caught itself.
   async errors(): Promise<string[]> {
     const caught = await this.eval(

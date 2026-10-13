@@ -1,0 +1,24 @@
+id: E10
+title: Deleted items survive a background restart
+given:
+  - A folder "Old" with Page 1 and Page 2 was deleted.
+when:
+  - The extension's background restarts.
+then:
+  - Deleted Items still lists "Old".
+notes: |
+  Deleted items live in IndexedDB behind the background's store service;
+  on Firefox the restart reloads the add-on, keeping the profile.
+  Deleting a folder saves it to Deleted Items before removing its bookmarks
+  (src/model/index.ts), so once "Old" has left the stash the save is done
+  and the restart can't race it.
+  Mutation check: in src/datastore/kvs/service.ts:122, in set(), replace
+  `if (value !== undefined) await txn.store.put(value, key);` with
+  `if (value !== undefined) {}` so nothing is written to IndexedDB;
+  "Deleted Items still lists" fails.
+  A second mutation shows the background really restarts: at the top of
+  openPersistentDB() (src/datastore/kvs/service.ts:211), add
+  `indexedDB.deleteDatabase(db_name);`.  Only a starting background opens
+  its databases, so this wipes Deleted Items only if the restart happened:
+  "Deleted Items still lists" fails, while E09, which has no restart,
+  still passes.
