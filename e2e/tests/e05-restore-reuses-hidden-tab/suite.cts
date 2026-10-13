@@ -38,10 +38,12 @@ steps(__dirname, {
       );
     },
 
-  "A new tab opens with Page 1.": async h => {
-    const tabs = await page1Tabs(h);
-    assert.equal(tabs.length, 1);
-    assert.equal(tabs[0].hidden, false);
+  "A new tab opens with Page 1 and becomes the active tab.": async h => {
+    // Restoring activates the tab once it has opened, so wait for that.
+    await h.waitUntil(async () => {
+      const tabs = await page1Tabs(h);
+      return tabs.length === 1 && !tabs[0].hidden && tabs[0].active;
+    }, "the single Page 1 tab to be active");
   },
 
   "Exactly one tab shows Page 1, and its bookmark is still in the stash.":
