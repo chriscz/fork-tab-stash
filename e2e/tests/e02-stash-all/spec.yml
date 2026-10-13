@@ -1,6 +1,5 @@
 id: E02
 title: Stash all open tabs
-clock: 2026-01-01T09:00:00Z
 given:
   - Three local pages are open in the window, and the stash is empty.
 when:
@@ -8,7 +7,10 @@ when:
 then:
   - A new folder appears at the top of "Tab Stash" with the three pages, in tab order.
   - step: The stash list shows the new folder, expanded, with its three tabs.
-    screenshot: stash-list-after-stash
+    screenshot:
+      name: stash-list-after-stash
+      mask:
+        - div.forest-item.folder > span.forest-title.editable
   - step: The three tabs are hidden and marked as hidden by Tab Stash.
     browser: firefox
   - step: The three tabs are closed.
@@ -16,16 +18,17 @@ then:
   - The window still has one visible tab.
 notes: |
   The stash starts empty, so the new folder is the only one (hence "at the top").
-  Folder names are "saved-<ISO time>"; assertions match the prefix.
+  Folder names are "saved-<ISO time>".
   The stash list's own tab isn't stashable, so it is the visible tab left.
   "Stash all" is the only link with class exactly "action stash"
   (src/stash-list/window.vue); a.action.stash alone matches a dozen links.
   Hidden tabs carry the session value hidden_by_tab_stash.
   Mutation check: in src/model/tabs.ts, make hide() return before calling
   browser.tabs.hide; the "hidden and marked" step fails.
-  The clock makes the folder's displayed name ("Saved 1/1/2026, 9:00:00 AM")
-  the same on every run; the folder is created after the clock is set, so
-  freezing it once the page has loaded is enough here.
+  The folder's title shows the real date and time it was saved, so the
+  screenshot masks it (the stash folder's title is the only span.forest-title
+  directly inside a div.forest-item.folder; the open-tabs section's title is
+  span.forest-title.disabled) and assertions match the "saved-" prefix.
   Screenshot steps wait for the state they show to settle: here, until the
   window has one visible tab.
   The golden includes the footer's version ("Tab Stash 3.5"), so a version

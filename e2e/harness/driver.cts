@@ -14,6 +14,8 @@ const HIDDEN_MARKER = "hidden_by_tab_stash"; // src/model/tabs.ts
 
 type Options = {sync?: object; local?: object};
 type SeedFolder = {title: string; pages: number[]};
+type Mask = string | [number, number, number, number];
+const MASK_CLASS = "e2e-screenshot-mask";
 
 // Serves /page/<n> as a tiny titled page, so tests have real, distinct tabs to
 // stash without touching the network.
@@ -32,37 +34,15 @@ function startPageServer(): Promise<any> {
   );
 }
 
-// Pins the page's current date (no-argument `new Date()`) at `iso`, so the
-// names Tab Stash generates from it, like new folders' names, render the same
-// on every run.  Date.now() keeps running, because Tab Stash times its own
-// waits with it (e.g. src/model/bookmarks.ts:616) and they never end on a
-// frozen clock.  It covers the page only: bookmarks' dateAdded still comes from
-// the browser's real clock.  It is installed after the page has loaded, so
-// dates computed during the page's first render use the real clock.
-const clockJs = (iso: string) => `(() => {
-  if (globalThis.__e2eClock) return;
-  const T = Date.parse(${JSON.stringify(iso)});
-  const Real = Date;
-  // Limits: Date() without new throws, and dates made before this runs aren't
-  // instanceof FrozenDate; Tab Stash does neither today.
-  class FrozenDate extends Real {
-    constructor(...a) { if (a.length === 0) super(T); else super(...a); }
-  }
-  globalThis.Date = FrozenDate;
-  globalThis.__e2eClock = true;
-})()`;
-
 class Driver {
   adapter: any;
   server: any;
-  clock?: string;
   version: string;
   page = "stash-list.html";
 
-  constructor(adapter: any, server: any, dist: string, clock?: string) {
+  constructor(adapter: any, server: any, dist: string) {
     this.adapter = adapter;
     this.server = server;
-    this.clock = clock;
     this.version = JSON.parse(
       fs.readFileSync(path.join(dist, "manifest.json"), "utf8"),
     ).version;
@@ -79,7 +59,6 @@ class Driver {
   async open(page: string): Promise<void> {
     this.page = page;
     await this.adapter.open(page);
-    if (this.clock) await this.adapter.eval(clockJs(this.clock));
   }
 
   eval(js: string): Promise<any> {
@@ -223,9 +202,58 @@ class Driver {
   }
 
   // A PNG of the visible page, after a short settle so animations finish.
-  async screenshot(): Promise<Buffer> {
+  // Masks black out parts that change from run to run, like the dates and
+  // times Tab Stash shows, so the image still matches its golden byte for
+  // byte.  The boxes are drawn in the page itself rather than painted onto the
+  // image, so this works the same in every browser with no image library.
+  async screenshot(opts: {mask?: Mask[]} = {}): Promise<Buffer> {
     await new Promise(r => setTimeout(r, 500));
-    return this.adapter.screenshot();
+    const masks = opts.mask ?? [];
+    if (masks.length === 0) return this.adapter.screenshot();
+    const cls = JSON.stringify(MASK_CLASS);
+    try {
+      const missing = await this.eval(`(() => {
+        const rects = [];
+        for (const m of ${JSON.stringify(masks)}) {
+          if (Array.isArray(m)) {
+            rects.push(m);
+            continue;
+          }
+          const els = [...document.querySelectorAll(m)];
+          if (els.length === 0) return m;
+          for (const el of els) {
+            const r = el.getBoundingClientRect();
+            rects.push([r.x, r.y, r.width, r.height]);
+          }
+        }
+        for (const [x, y, w, h] of rects) {
+          // Round outwards, so anti-aliased edges of the text underneath
+          // can't show past the box.
+          const left = Math.floor(x), top = Math.floor(y);
+          const box = document.createElement("div");
+          box.className = ${cls};
+          box.style.cssText = [
+            "position: fixed",
+            "left: " + left + "px",
+            "top: " + top + "px",
+            "width: " + (Math.ceil(x + w) - left) + "px",
+            "height: " + (Math.ceil(y + h) - top) + "px",
+            "background: #000",
+            "z-index: 2147483647",
+            "pointer-events: none",
+          ].join(";");
+          document.documentElement.appendChild(box);
+        }
+        return null;
+      })()`);
+      if (missing !== null)
+        throw new Error(`Mask selector matched nothing: ${missing}`);
+      return await this.adapter.screenshot();
+    } finally {
+      await this.eval(
+        `document.querySelectorAll("." + ${cls}).forEach(b => b.remove())`,
+      );
+    }
   }
 
   // Errors from the browser's console plus those Tab Stash caught itself.
@@ -248,10 +276,7 @@ class Driver {
 // Starts a browser with the build in `dist` installed, opens the stash list in
 // its only tab, and sets options that keep tests deterministic: no
 // restore-choice prompt, no close confirmation, no "what's new" notice.
-async function launch(
-  browser: string,
-  {dist, clock}: {dist: string; clock?: string},
-) {
+async function launch(browser: string, {dist}: {dist: string}) {
   const server = await startPageServer();
   let adapter;
   try {
@@ -265,7 +290,7 @@ async function launch(
   // node running.
   let h: any;
   try {
-    h = new Driver(adapter, server, dist, clock);
+    h = new Driver(adapter, server, dist);
     await h.open("stash-list.html");
     // On a fresh install the background records last_notified_version by
     // rewriting the whole local options object from its own copy.  Seeding

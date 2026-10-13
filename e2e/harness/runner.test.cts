@@ -41,7 +41,7 @@ const allFns = () => ({
 test("parseSpec keeps phase order and names screenshots", () => {
   const s = spec();
   assert.deepEqual(
-    s.steps.map(x => [x.phase, x.text, x.browser, x.screenshot]),
+    s.steps.map(x => [x.phase, x.text, x.browser, x.screenshot?.name]),
     [
       ["given", "A given step.", undefined, undefined],
       ["when", "A when step.", undefined, undefined],
@@ -51,6 +51,37 @@ test("parseSpec keeps phase order and names screenshots", () => {
       ["then", "A named shot.", undefined, "named"],
     ],
   );
+  assert.deepEqual(s.steps[3].screenshot.mask, []);
+  assert.deepEqual(s.steps[5].screenshot.mask, []);
+});
+
+test("parseSpec reads masked screenshots and rejects bad masks", () => {
+  const withShot = (yamlShot: string) =>
+    parseSpec(
+      SPEC.replace("    screenshot: named", `    screenshot: ${yamlShot}`),
+      "f",
+    ).steps[5].screenshot;
+  assert.deepEqual(withShot(`{name: shot, mask: [".a", [1, 2, 3, 4]]}`), {
+    name: "shot",
+    mask: [".a", [1, 2, 3, 4]],
+  });
+  assert.deepEqual(withShot(`{mask: [".a"]}`), {
+    name: "then-4",
+    mask: [".a"],
+  });
+  for (const bad of ["[1, 2, 3]", "[1, 2, 0, 4]", '""', "5"]) {
+    assert.throws(
+      () => withShot(`{mask: [${bad}]}`),
+      /then\[4\]: mask entries must be a CSS selector or \[x, y, w, h\]/,
+      bad,
+    );
+  }
+  assert.throws(
+    () => withShot(`{mask: [".a"], extra: 1}`),
+    /unknown screenshot key "extra"/,
+  );
+  assert.throws(() => withShot(`{mask: []}`), /non-empty mask list/);
+  assert.throws(() => withShot(`{name: x}`), /non-empty mask list/);
 });
 
 test("parseSpec rejects duplicate text, unknown keys and misplaced screenshots", () => {
@@ -184,15 +215,18 @@ test("matchGolden writes, matches and reports differences", () => {
   }
 });
 
-test("parseSpec keeps an unquoted clock as a string", () => {
-  const s = parseSpec(
-    SPEC.replace(
-      "title: Example",
-      "title: Example\nclock: 2026-01-01T09:00:00Z",
-    ),
-    "f",
+test("parseSpec rejects the removed clock key", () => {
+  assert.throws(
+    () =>
+      parseSpec(
+        SPEC.replace(
+          "title: Example",
+          "title: Example\nclock: 2026-01-01T09:00:00Z",
+        ),
+        "f",
+      ),
+    /unknown key "clock"/,
   );
-  assert.equal(s.clock, "2026-01-01T09:00:00Z");
 });
 
 test("run calls afterStep once per executed step, not for skipped ones", async () => {

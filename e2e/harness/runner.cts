@@ -29,17 +29,19 @@ const yaml = requireFromNodePath("js-yaml");
 
 type Browser = "firefox" | "chrome";
 type Phase = "given" | "when" | "then";
+// A CSS selector (the box of every element it matches) or an [x, y, w, h]
+// rectangle in CSS pixels, blacked out before the screenshot is taken.
+type Mask = string | [number, number, number, number];
 type Step = {
   phase: Phase;
   text: string;
   browser?: Browser;
-  screenshot?: string;
+  screenshot?: {name: string; mask: Mask[]};
 };
 type Spec = {
   id: string;
   title: string;
   browser?: Browser;
-  clock?: string;
   notes: string;
   steps: Step[];
 };
@@ -48,24 +50,27 @@ type Subtest = (name: string, body?: () => Promise<void>) => Promise<boolean>;
 
 const PHASES: Phase[] = ["given", "when", "then"];
 const BROWSERS = ["firefox", "chrome"];
-const SPEC_KEYS = [
-  "id",
-  "title",
-  "browser",
-  "clock",
-  "given",
-  "when",
-  "then",
-  "notes",
-];
+const SPEC_KEYS = ["id", "title", "browser", "given", "when", "then", "notes"];
 const STEP_KEYS = ["step", "browser", "screenshot"];
+const SCREENSHOT_KEYS = ["name", "mask"];
+
+function isMask(m: unknown): m is Mask {
+  if (typeof m === "string") return m.length > 0;
+  return (
+    Array.isArray(m) &&
+    m.length === 4 &&
+    m.every(n => typeof n === "number" && Number.isFinite(n)) &&
+    m[2] > 0 &&
+    m[3] > 0
+  );
+}
 
 function parseSpec(text: string, where: string): Spec {
   const fail = (msg: string): never => {
     throw new Error(`${where}: ${msg}`);
   };
-  // The core schema has no timestamp type, so an unquoted clock stays a string
-  // instead of becoming a Date.
+  // The core schema has no timestamp type, so a date-like value stays a
+  // string instead of becoming a Date.
   const raw: any = yaml.load(text, {schema: yaml.CORE_SCHEMA});
   if (!raw || typeof raw !== "object") fail("not a YAML mapping");
   for (const key of Object.keys(raw)) {
@@ -76,12 +81,6 @@ function parseSpec(text: string, where: string): Spec {
   }
   if (raw.browser !== undefined && !BROWSERS.includes(raw.browser)) {
     fail("browser must be firefox or chrome");
-  }
-  if (
-    raw.clock !== undefined &&
-    (typeof raw.clock !== "string" || Number.isNaN(Date.parse(raw.clock)))
-  ) {
-    fail("clock must be an ISO date and time");
   }
   if (typeof raw.notes !== "string") fail("needs notes");
 
@@ -100,14 +99,32 @@ function parseSpec(text: string, where: string): Spec {
       if (s.browser !== undefined && !BROWSERS.includes(s.browser)) {
         fail(`${at}: browser must be firefox or chrome`);
       }
-      let screenshot: string | undefined;
-      if (s.screenshot !== undefined) {
+      let screenshot: Step["screenshot"];
+      const shot = s.screenshot;
+      if (shot !== undefined) {
         if (phase !== "then")
           fail(`${at}: screenshot is only allowed on then steps`);
-        if (s.screenshot === true) screenshot = `then-${i + 1}`;
-        else if (typeof s.screenshot === "string" && s.screenshot)
-          screenshot = s.screenshot;
-        else fail(`${at}: screenshot must be true or a file name`);
+        const fallback = `then-${i + 1}`;
+        if (shot === true) screenshot = {name: fallback, mask: []};
+        else if (typeof shot === "string" && shot)
+          screenshot = {name: shot, mask: []};
+        else if (shot && typeof shot === "object" && !Array.isArray(shot)) {
+          for (const key of Object.keys(shot)) {
+            if (!SCREENSHOT_KEYS.includes(key))
+              fail(`${at}: unknown screenshot key "${key}"`);
+          }
+          if (
+            shot.name !== undefined &&
+            (typeof shot.name !== "string" || !shot.name)
+          )
+            fail(`${at}: screenshot name must be a non-empty file name`);
+          if (!Array.isArray(shot.mask) || shot.mask.length === 0)
+            fail(`${at}: screenshot needs a non-empty mask list`);
+          if (!shot.mask.every(isMask))
+            fail(`${at}: mask entries must be a CSS selector or [x, y, w, h]`);
+          screenshot = {name: shot.name ?? fallback, mask: shot.mask};
+        } else
+          fail(`${at}: screenshot must be true, a file name or {name, mask}`);
       }
       steps.push({phase, text: s.step, browser: s.browser, screenshot});
     });
@@ -122,7 +139,6 @@ function parseSpec(text: string, where: string): Spec {
     id: raw.id,
     title: raw.title,
     browser: raw.browser,
-    clock: raw.clock,
     notes: raw.notes,
     steps,
   };
@@ -238,7 +254,7 @@ function steps(dir: string, fns: Record<string, StepFn>): void {
   test(`${spec.id} ${spec.title} (${browser})`, {skip}, async t => {
     const pairs = bind(spec, fns, browser);
     const {launch} = require("./driver.cts");
-    const h = await launch(browser, {dist, clock: spec.clock});
+    const h = await launch(browser, {dist});
     try {
       await run(
         pairs,
@@ -265,7 +281,12 @@ function steps(dir: string, fns: Record<string, StepFn>): void {
         },
         async step => {
           if (step.screenshot)
-            matchGolden(dir, browser, step.screenshot, await h.screenshot());
+            matchGolden(
+              dir,
+              browser,
+              step.screenshot.name,
+              await h.screenshot({mask: step.screenshot.mask}),
+            );
         },
       );
     } finally {
