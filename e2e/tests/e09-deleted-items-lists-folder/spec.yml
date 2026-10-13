@@ -1,0 +1,28 @@
+id: E09
+title: Deleting a folder lists it in Deleted Items
+given:
+  - The stash has a folder "Old" with Page 1 and Page 2.
+when:
+  - The user deletes "Old" with "Delete Group" from its menu.
+then:
+  - '"Old" is no longer in the stash.'
+  - Deleted Items lists "Old" with its two pages.
+  - step: Deleted Items shows "Old" under today's date.
+    screenshot:
+      name: deleted-items
+      mask:
+        - ul.forest > li.folder > div.forest-item > span.forest-title.disabled
+notes: |
+  "Delete Group" sits in the folder's menu (details.menu); its button only
+  renders while the menu is open, and is found by its title
+  (h.message("deleteGroupTooltip")).
+  In Deleted Items a deleted folder's row is div.forest-item.folder.deleted
+  and its pages are listed, always expanded, in the ul.forest-children right
+  after it (src/deleted-items/item.vue).
+  Each day's header is the disabled .forest-title of a top-level li.folder
+  (src/deleted-items/index.vue). It shows the real date, so the screenshot
+  masks it by that selector, which matches only the headers.
+  Mutation check: in src/model/index.ts:1366, delete the line
+  `await this.deleted_items.add(await toDelItem(node), undefined, deleted_at);`
+  so deleting a folder doesn't record it in deleted items; "Deleted Items
+  lists" fails.

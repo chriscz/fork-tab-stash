@@ -48,6 +48,21 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Fix:** filter the tabs with `isURLStashable()` before copying.
 - **Status:** open, not reported.
 
+### A deleted-items unit test fails about once in a thousand runs
+
+- **Where:** `src/model/deleted-items.test.ts:337-348`, "only loads new items
+  that match the applied filter".
+- **What:** the test fills deleted items with `makeFakeData_testonly(50)`,
+  whose titles are three random words out of 22, then expects at least one
+  top-level title to contain "cat". With no title containing it (about
+  (21/22)^150, roughly 0.1%), `expected +0 to be above +0` fails.
+- **Effect:** `make` fails now and then for no reason; a rerun passes.
+- **Found:** `bin/dev run make` while adding E7, E9 and E19, 2026-10-13. One
+  failure, then 625 passing on the rerun.
+- **Fix:** add one item whose title contains "cat" before checking, or make
+  the fake data's random choice seedable.
+- **Status:** open, not reported.
+
 ## Fixed in this fork
 
 ### Chrome rejects dotted plural message keys

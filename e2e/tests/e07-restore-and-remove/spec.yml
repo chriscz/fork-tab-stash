@@ -1,0 +1,21 @@
+id: E07
+title: Restore and remove
+given:
+  - The stash has a folder "Reading" with Page 1 and Page 2.
+when:
+  - The user clicks "Open all tabs in this group and delete the group" on "Reading".
+then:
+  - Page 1 and Page 2 are open and visible.
+  - '"Reading" is no longer in the stash.'
+  - Deleted Items lists "Reading".
+notes: |
+  restore_folders_into is seeded as "target-window", so no prompt appears.
+  The folder's link has class exactly "action restore-remove".
+  The when step waits only for the pages to open, not for the folder to go,
+  so a folder that is never deleted fails its own then step.
+  The last then step opens deleted-items.html to look; its list loads lazily
+  when its footer is in view, so the test's tab is made active first.
+  Mutation check: in src/stash-list/folder.vue:717-720, replace the
+  `beforeClosing: () => ...` callback with `beforeClosing: async () => {}`,
+  so restore-and-remove never deletes the folder; '"Reading" is no longer
+  in the stash.' fails (and so does "Deleted Items lists").
