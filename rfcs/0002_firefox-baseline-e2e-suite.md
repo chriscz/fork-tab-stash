@@ -124,7 +124,7 @@ The format:
 - **Steps.** Every `given`, `when` and `then` entry is a plain string, or an object with a `step` and any of these keys:
   - **`browser`** (`firefox` or `chrome`) limits the step to that browser. This is how a spec states browser differences, right where they happen. A step without it applies to both browsers. A top-level `browser` limits the whole test (e.g. E14, which needs hidden tabs).
   - **`screenshot`** captures the page after the step and compares it with a golden. `screenshot: <name>` stores it as `<name>.png`. `screenshot: true` uses the step's position, `then-<n>.png`, counting every `then` step from 1 whatever its `browser`, so the name is the same in both browsers. Goldens are stored per browser, under `screenshots/<browser>/`.
-- **`clock`** freezes the page's clock at that instant (see section 2). Only specs with screenshots set it.
+- **`clock`** pins the page's current date (`new Date()`) to that instant (see section 2). Only specs with screenshots set it.
 - **`notes`** is free text for whoever writes or maintains the suite: variations, timing traps, fragile selectors, upstream bugs to avoid relying on, and the test's **mutation check**. That is a one-line change to Tab Stash that makes the test fail, so anyone can re-run it later.
 
 **`suite.cts` binds code to the spec's steps.** It supplies one function per step, keyed by the step's exact text, and nothing else. It has no ordering, no browser checks and no screenshot calls; the runner takes those from the spec. Each function checks its whole sentence:
@@ -225,7 +225,8 @@ Tests about hiding tabs keep the default `after_stashing_tab: "hide"`.
 - **Fixed locale and timezone:** `TZ=UTC` and `intl.locale.requested=en-US` (Firefox) or `--lang=en-US` (Chrome).
 - **Pinned rendering:** the browsers and fonts are pinned in the image.
 - **Settle wait:** a short wait before each capture.
-- **A frozen clock,** for specs that set `clock`. Folder names (`Saved 1/1/2026, 9:00:00 AM`) and Deleted Items' times and day headers then render the same on every run.
+- **A pinned date,** for specs that set `clock`. The driver makes `new Date()` with no arguments return that instant, so dates Tab Stash creates, such as folder names (`Saved 1/1/2026, 9:00:00 AM`), render the same on every run.
+  - **`Date.now()` keeps running.** Tab Stash times its own waits with it, e.g. a 20 ms loop when it creates the stash folder (`src/model/bookmarks.ts:616`). Freezing it deadlocked the stash in Phase A, so only the current date is pinned. Anything Tab Stash stamps with `Date.now()` still gets the real time.
   - **Page only.** The clock is frozen in the page only. Bookmarks' `dateAdded` still comes from the browser's real clock, so the clock stays off in specs whose behaviour compares the two, such as E3's "folder under 5 minutes old".
   - **Installing it early.** Chrome installs the clock before the page's scripts run. Firefox has no preload hook for extension pages, so Phase A must prove the clock can be installed before the first render, e.g. by navigating with `wait: "none"` or from the chrome context. If it can't, screenshots of views with generated times are dropped from those specs.
 
@@ -364,7 +365,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
   - Toolbars are hidden until hover (`styles/forest.less:62`). `el.click()` still works, but visibility can't be asserted.
   - An upstream UI refactor could break many tests at once. `data-test` attributes would fix this, but they touch upstream UI code (Open question 3).
 - **Timing.** Folders render their children on intersection, search waits 250 ms, and the undo notification lasts 8 seconds. The driver polls with bounded waits. The three-run rule catches flakiness, at the cost of runtime.
-- **The frozen clock is partial.** It covers the page's `Date` only, so specs that compare page time with browser timestamps can't use it. Firefox may also not allow installing it before the first render (Open question 1).
+- **The pinned date is partial.** It covers `new Date()` in the page only. `Date.now()` and browser timestamps stay real, so views showing times stamped from those can't be screenshotted deterministically. Specs that compare page time with browser timestamps can't use it either. Firefox may also not allow installing it before the first render (Open question 1).
 - **Goldens churn and add binaries.** An intentional UI change invalidates the affected goldens, which then need regenerating and reviewing. Each PNG is about 15–20 KB.
 - **Each sentence is written twice,** once in YAML and once in the suite. The runner catches mismatches, but rewording a step means editing two files.
 - **The image grows slightly.** It's 2.67 GB today; this adds one test-only npm package (`js-yaml`). The suite is fork tooling, not proposed upstream unless the maintainer asks.
