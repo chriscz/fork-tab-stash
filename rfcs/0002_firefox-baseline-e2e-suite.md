@@ -58,7 +58,7 @@ Chrome needs none of these workarounds: Puppeteer's `page.goto`, `page.screensho
 3. **A real baseline.** Every test passes against an unmodified upstream build (`622bf3d`) in Firefox before it's used to judge anything else. Its golden screenshots come from that build.
 4. **Assertions on user-visible state.** Tests assert on what a user can see (the bookmark tree, open and hidden tabs, what the page shows), not on model internals. This follows Chrome's testing guidance ([end-to-end testing](https://developer.chrome.com/docs/extensions/how-to/test/end-to-end-testing)).
 5. **Browser-neutral tests.** Suites never touch a browser's automation protocol directly, so the same specs and suites can run on Chrome later by adding an adapter, not by rewriting tests.
-6. **Runs where everything else does, fast and reliably.** It runs in the dev Docker image with one command. Test time, excluding builds, is under five minutes. The whole suite passes three consecutive runs.
+6. **Runs where everything else does, fast and reliably.** It runs in the dev Docker image with one command (`bin/e2e test --browser=firefox`). Test time, excluding builds, is under five minutes. The whole suite passes three consecutive runs.
 
 ## Non-goals
 
@@ -269,6 +269,20 @@ Each row seeds one `spec.yml`. Once the spec exists, the spec is the authority a
 
 ### 5. Running it, and proving the baseline
 
+**`bin/e2e` is the entrypoint.** It's a small shell script, separate from `bin/dev` so that `bin/dev` stays a generic Docker wrapper. It turns a few flags into the right Makefile target and environment, and runs it in the dev image through `bin/dev run`:
+
+```
+bin/e2e test --browser=firefox                    # suite against this checkout
+bin/e2e test --browser=firefox --baseline         # suite against the pinned upstream build
+bin/e2e test --browser=firefox --baseline=<ref>   # ... or another upstream commit
+bin/e2e test --browser=firefox --baseline --update-goldens   # regenerate goldens
+bin/e2e test --browser=chrome                     # the Chrome smoke test, for now
+bin/e2e help
+```
+
+- **`--browser` is required.** `--baseline` and `--update-goldens` are Firefox-only, because upstream has no Chrome build to take a baseline from.
+- **The Makefile targets stay the real logic,** so there's still one build system. `bin/e2e` only chooses among them.
+
 Before and after, in the Makefile:
 
 | Target               | Today                                         | After                                                                        |
@@ -297,7 +311,7 @@ check-e2e-baseline:
 ```
 
 - **The baseline is pinned** to the upstream commit we verified (`622bf3d`), not to whatever local `master` points at. We move it on purpose, in its own commit, after pulling upstream and regenerating the goldens. `node_modules/` is gitignored, so Prettier and git ignore the cached clone. The first baseline build takes a few minutes (`npm clean-install`); later runs reuse it.
-- **Golden screenshots:** `UPDATE_SCREENSHOTS=1 bin/dev run make check-e2e-baseline` writes them from the baseline build. Our branch must then match them. A branch that changes Firefox's UI on purpose regenerates the affected goldens in the same PR, and the reviewer approves the image diff. Nothing in RFC 0001 should change Firefox's UI, so for now the goldens are always the baseline's.
+- **Golden screenshots:** `bin/e2e test --browser=firefox --baseline --update-goldens` writes them from the baseline build (it sets `UPDATE_SCREENSHOTS=1` for `check-e2e-baseline`). Our branch must then match them. A branch that changes Firefox's UI on purpose regenerates the affected goldens in the same PR, and the reviewer approves the image diff. Nothing in RFC 0001 should change Firefox's UI, so for now the goldens are always the baseline's.
 - **A test is accepted only if:**
   - it passes against the baseline, and the whole suite then passes three consecutive runs;
   - it passes against our branch (no Firefox regression);
@@ -355,7 +369,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
   - the driver and the Firefox adapter;
   - `fixtures.cts`;
   - `js-yaml` in `install-test-deps.sh`;
-  - the `check-e2e-firefox` and `check-e2e-baseline` changes;
+  - `bin/e2e`, and the `check-e2e-firefox` and `check-e2e-baseline` changes;
   - specs and suites for E1 (the smoke test, moved), E2 and E8, with E2's goldens generated from the baseline.
 - **Proofs needed in this phase:**
   - Can the frozen clock be installed before Firefox renders (Open question 1)?
@@ -375,7 +389,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
 
 **After this RFC.** RFC 0001 adds the Chrome adapter, runs the specs with `browser: chrome` steps, and records a parity table. If a core scenario fails on Chrome in a way that needs architectural change, that becomes a further Chrome RFC, as RFC 0001's Rollout says.
 
-**Rollback:** the suite is additive and fork-only. Removing `e2e/tests/`, `e2e/harness/` and the target changes undoes it. The smoke test can be restored from git.
+**Rollback:** the suite is additive and fork-only. Removing `e2e/tests/`, `e2e/harness/`, `bin/e2e` and the target changes undoes it. The smoke test can be restored from git.
 
 ## Success criteria
 
