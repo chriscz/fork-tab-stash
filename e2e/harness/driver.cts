@@ -13,7 +13,10 @@ const STASH_ROOT = "Tab Stash";
 const HIDDEN_MARKER = "hidden_by_tab_stash"; // src/model/tabs.ts
 
 type Options = {sync?: object; local?: object};
-type SeedFolder = {title: string; pages: number[]};
+type SeedFolder = {
+  title: string;
+  pages: Array<number | {title: string; url: string}>;
+};
 type Mask = string | [number, number, number, number];
 const MASK_CLASS = "e2e-screenshot-mask";
 
@@ -39,6 +42,10 @@ class Driver {
   server: any;
   version: string;
   page = "stash-list.html";
+  // Scratch space for a value one step records for a later one, e.g. a tab id
+  // taken before an action.
+  vars: Record<string, any> = {};
+  messages: Record<string, {message: string}>;
 
   constructor(adapter: any, server: any, dist: string) {
     this.adapter = adapter;
@@ -46,6 +53,9 @@ class Driver {
     this.version = JSON.parse(
       fs.readFileSync(path.join(dist, "manifest.json"), "utf8"),
     ).version;
+    this.messages = JSON.parse(
+      fs.readFileSync(path.join(dist, "_locales/en/messages.json"), "utf8"),
+    );
   }
 
   pageUrls(n: number): string[] {
@@ -54,6 +64,10 @@ class Driver {
       {length: n},
       (_, i) => `http://127.0.0.1:${port}/page/${i + 1}`,
     );
+  }
+
+  pageUrl(n: number): string {
+    return this.pageUrls(n)[n - 1];
   }
 
   async open(page: string): Promise<void> {
@@ -97,17 +111,105 @@ class Driver {
       `!!document.querySelector(${sel})`,
       `an element matching ${selector}`,
     );
-    await this
-      .eval(`document.querySelector(${sel}).dispatchEvent(new MouseEvent("click", {
-      bubbles: true, cancelable: true,
-      altKey: ${!!mods.alt}, ctrlKey: ${!!mods.ctrl}, shiftKey: ${!!mods.shift},
-    }))`);
+    await this.eval(this.clickJs(`document.querySelector(${sel})`, mods));
   }
 
-  // Opens n local pages as background tabs in the page's window and waits for
-  // them to load, so their titles are known.
-  async openPages(n: number): Promise<void> {
-    const urls = this.pageUrls(n);
+  // The JS that dispatches a synthetic click on the element `el` evaluates to.
+  private clickJs(
+    el: string,
+    mods: {alt?: boolean; ctrl?: boolean; shift?: boolean},
+  ) {
+    return `${el}.dispatchEvent(new MouseEvent("click", {
+      bubbles: true, cancelable: true,
+      altKey: ${!!mods.alt}, ctrlKey: ${!!mods.ctrl}, shiftKey: ${!!mods.shift},
+    }))`;
+  }
+
+  // Clicks `target` inside the row matching `rowSelector` whose .forest-title
+  // text is `title`: first within the row itself (its toolbar and menu), then
+  // within the children listed right after it.  CSS can't pick a row by its
+  // text, and titles like "Page 1" appear in several lists at once.
+  async clickInRow(
+    rowSelector: string,
+    title: string,
+    target: string,
+    mods: {alt?: boolean; ctrl?: boolean; shift?: boolean} = {},
+  ) {
+    const find = `(() => {
+      const row = [...document.querySelectorAll(${JSON.stringify(rowSelector)})]
+        .find(r => r.querySelector(".forest-title")?.textContent.trim() === ${JSON.stringify(title)});
+      if (!row) return null;
+      return row.querySelector(${JSON.stringify(target)})
+        ?? row.nextElementSibling?.querySelector(${JSON.stringify(target)}) ?? null;
+    })()`;
+    await this.waitFor(`!!${find}`, `${target} in the row titled "${title}"`);
+    await this.eval(this.clickJs(find, mods));
+  }
+
+  // clickInRow for a stash folder, found by its displayed title.
+  clickInFolder(folder: string, target: string, mods = {}) {
+    return this.clickInRow("div.forest-item.folder", folder, target, mods);
+  }
+
+  // Sets an input's value as typing would, and fires "input".
+  async type(selector: string, text: string): Promise<void> {
+    const sel = JSON.stringify(selector);
+    await this.waitFor(
+      `!!document.querySelector(${sel})`,
+      `an input matching ${selector}`,
+    );
+    await this.eval(`(() => {
+      const el = document.querySelector(${sel});
+      el.focus();
+      el.value = ${JSON.stringify(text)};
+      el.dispatchEvent(new Event("input", {bubbles: true}));
+    })()`);
+  }
+
+  // Presses a key on an element: keydown then keyup, as a real key press does.
+  async press(selector: string, key: string): Promise<void> {
+    const sel = JSON.stringify(selector);
+    await this.waitFor(
+      `!!document.querySelector(${sel})`,
+      `an element matching ${selector}`,
+    );
+    await this.eval(`(() => {
+      const el = document.querySelector(${sel});
+      for (const type of ["keydown", "keyup"]) {
+        el.dispatchEvent(new KeyboardEvent(type, {key: ${JSON.stringify(key)}, bubbles: true, cancelable: true}));
+      }
+    })()`);
+  }
+
+  // The English text of one of Tab Stash's messages, for selecting elements by
+  // their title or label.  Placeholders like $1 are left as they are.
+  message(key: string): string {
+    const m = this.messages[key];
+    if (!m) throw new Error(`No message "${key}"`);
+    return m.message;
+  }
+
+  // Makes the test's own tab the active one again, e.g. after restoring tabs
+  // activated others, so a screenshot shows a foreground page.
+  async activate(): Promise<void> {
+    await this.eval(
+      `browser.tabs.getCurrent().then(t => browser.tabs.update(t.id, {active: true}))`,
+    );
+    await this.waitFor(
+      `browser.tabs.getCurrent().then(t => t.active)`,
+      "the test's tab to be active",
+    );
+  }
+
+  // Opens local pages as background tabs in the page's window and waits for
+  // them to load, so their titles are known.  A number n opens pages 1..n; a
+  // list opens just those pages.
+  async openPages(pages: number | number[]): Promise<void> {
+    const nums =
+      typeof pages === "number"
+        ? Array.from({length: pages}, (_, i) => i + 1)
+        : pages;
+    const urls = nums.map(n => this.pageUrl(n));
     for (const url of urls) {
       await this.eval(
         `browser.tabs.create({url: ${JSON.stringify(url)}, active: false})`,
@@ -117,7 +219,7 @@ class Driver {
     await this.waitFor(
       `browser.tabs.query({currentWindow: true}).then(ts => ${list}.every(u =>
         ts.some(t => t.url === u && t.status === "complete")))`,
-      `${n} pages to load`,
+      `pages ${nums.join(", ")} to load`,
     );
   }
 
@@ -175,8 +277,9 @@ class Driver {
       const urls = ${JSON.stringify(urls)};
       for (const f of folders) {
         const folder = await browser.bookmarks.create({parentId: root.id, title: f.title});
-        for (const n of f.pages) {
-          await browser.bookmarks.create({parentId: folder.id, title: "Page " + n, url: urls[n - 1]});
+        for (const p of f.pages) {
+          const b = typeof p === "number" ? {title: "Page " + p, url: urls[p - 1]} : p;
+          await browser.bookmarks.create({parentId: folder.id, title: b.title, url: b.url});
         }
       }
     })()`);
@@ -250,9 +353,12 @@ class Driver {
         throw new Error(`Mask selector matched nothing: ${missing}`);
       return await this.adapter.screenshot();
     } finally {
-      await this.eval(
-        `document.querySelectorAll("." + ${cls}).forEach(b => b.remove())`,
-      );
+      // A failed cleanup must not hide the error that got us here.
+      try {
+        await this.eval(
+          `document.querySelectorAll("." + ${cls}).forEach(b => b.remove())`,
+        );
+      } catch {}
     }
   }
 
