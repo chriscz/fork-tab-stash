@@ -60,7 +60,7 @@ Five smaller breakages:
 - **Toolbar-button checks.** They use `if (browser.browserAction)` (`src/index.ts:322`, `:413`), and MV3 renames the namespace to `action` [R7], so the button would silently stop working. The unguarded calls in `show_popup` (`:178-183`) would throw.
 - **Context menus.** The toolbar right-click menu uses the `browser_action` context (`src/index.ts:131-142`). Chrome documents `action` as the context for the toolbar button [R22]. `menu()` drops any context the browser does not list (`:73-89`), so that menu may silently disappear.
 - **Startup GC.** The unconditional `gc()` at startup (`src/index.ts:584`) would run on every wake instead of once per browser session.
-- **Locale message keys.** Chrome refuses to load an extension whose locale message keys contain anything but `[A-Za-z0-9_]`. The plural keys added in September 2026 (commit `8117e3d`) use a dot, such as `child_group.one`, so the Chrome build hasn't loaded since then. The new end-to-end test found this: `Extensions.loadUnpacked: Name of a key "child_group.one" is invalid`.
+- **Locale message keys.** Chrome refuses to load an extension whose locale message keys contain anything but `[A-Za-z0-9_]`. The plural keys added in September 2026 (commit `8117e3d`) use a dot, such as `child_group.one`, so the Chrome build hasn't loaded since then. Chrome reports `Name of a key "child_group.one" is invalid` when loading it.
 
 **Some differences are Chrome's, not MV3's.** Chrome lacks four Firefox features, and the code already feature-detects each one:
 
@@ -378,8 +378,6 @@ Each of these is gated so that Firefox's MV2 build never runs it:
 - **GC alarm check:** run `chrome.alarms.get("gc")` before and after a stop and wake, and confirm `scheduledTime` is unchanged.
 
 **Phase 4: Distribution.** The maintainer decides. It needs a Chrome Web Store developer account and listing [R13]. Until then, Chrome builds are for developers only.
-
-**Automated checks.** Where Chrome allows, Phase 0 and Phase 3 run as Puppeteer end-to-end tests in the dev Docker image (`make check-e2e-chrome`). The tests drive Chrome for Testing, stop the service worker, and assert on what a user would see. Puppeteer can't load extensions into Firefox, so a separate check confirms the Firefox build installs and its pages load. Firefox's behaviour is otherwise covered by the unit tests, since this stack doesn't change it. Native context menus can't be clicked from Puppeteer, so those items stay on the manual checklist.
 
 **If core functionality is broken.** This RFC aims for parity with Firefox on core functionality in Chrome. If the checks show something core is broken in a way that needs architectural change, it goes to a second RFC rather than growing this one. The likely case is the maintainer's "single biggest barrier": operations started in Chrome's popup are cut off when the popup closes, which needs tab, window and bookmark changes moved out of the UI (see [maintainer-views.md](0001_chrome-mv3-separate-manifest.d/maintainer-views.md)). If everything keeps working, that larger change is postponed.
 
