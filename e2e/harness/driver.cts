@@ -1,6 +1,6 @@
 // The browser-neutral driver every suite uses (`h`).  Suites never talk to a
 // browser's automation protocol: the few browser-specific primitives (open,
-// eval, screenshot, errors) come from an adapter (firefox.cts), and
+// eval, screenshot, errors) come from an adapter (firefox.cts, chrome.cts), and
 // everything else is built here on the page's own browser.* APIs, which are
 // the same in every browser.
 
@@ -432,7 +432,8 @@ class Driver {
     }
   }
 
-  // Restarts the extension's background (Firefox reloads the add-on), then
+  // Restarts the extension's background (Firefox reloads the add-on; Chrome
+  // stops its service worker, and reopening the page wakes it), then
   // reopens the current page.  The page may not load while the extension is
   // still coming back, so each attempt reopens it and gives it a few seconds
   // to finish starting up; reopening sooner would cut its startup short.

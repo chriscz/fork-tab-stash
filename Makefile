@@ -62,9 +62,11 @@ check-e2e-chrome: build-chrome-dbg
 .PHONY: check-e2e-chrome
 
 E2E_DIST ?= dist
+# Narrows a run to some suites, e.g. E2E_SPECS='e2e/tests/e01-*/suite.cts'.
+E2E_SPECS ?= e2e/tests/*/suite.cts
 
 check-e2e-firefox: build-dbg
-	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts e2e/tests/*/suite.cts
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts $(E2E_SPECS)
 .PHONY: check-e2e-firefox
 
 # Builds E2E_REF once (cached per resolved commit, inside the bind-mounted repo
