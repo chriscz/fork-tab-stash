@@ -1,0 +1,17 @@
+id: E16
+title: Privileged URLs restore through the redirect page
+given:
+  - The stash has a folder "Odd" with a bookmark "Robots" for about:robots.
+when:
+  - The user clicks the bookmark "Robots" in the stash list.
+then:
+  - A tab opens on Tab Stash's restore page for about:robots.
+notes: |
+  Extensions can't open most about: URLs, so urlToOpen (src/util/index.ts)
+  sends them to restore.html?url=<encoded URL>. The then step compares the
+  whole tab URL, built from browser.runtime.getURL("restore.html"), so it is
+  this extension's restore page, and checks no tab tried about:robots
+  itself.
+  Mutation check: in src/util/index.ts:126, replace
+  `return redirUrl(urlstr);` with `return urlstr as OpenableURL;`, so
+  about: URLs are opened as they are; the then step fails.

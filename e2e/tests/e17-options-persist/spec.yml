@@ -1,0 +1,24 @@
+id: E17
+title: Options persist
+given:
+  - Tab Stash's options page is open.
+when:
+  - The user selects "close the tab" for what happens after stashing a tab.
+  - The user reloads the options page.
+then:
+  - The "close the tab" choice is still selected.
+  - Tab Stash's stored options say tabs are closed after stashing.
+notes: |
+  The radio's id is after_stashing_tab_close (radios are <key>_<value>), in
+  the "tab memory" section, which is not an advanced one, so it shows
+  without meta_show_advanced. after_stashing_tab lives in storage.local's
+  "options" object; the given step checks it isn't "close" yet, so the
+  then steps can only pass if the choice changed it.
+  The first when step waits for the choice to be stored, since reloading
+  before then would lose it. So a page that never saves (prop()'s setter
+  skipping model.set) fails that when step, not a then step; the then
+  steps check the reloaded page and storage.
+  Mutation check: in src/options/index.vue:486, replace
+  `return model.state[name as keyof typeof model.state];` with
+  `return undefined as any;`, so the page saves choices but never shows
+  stored ones; the "still selected" then step fails.
