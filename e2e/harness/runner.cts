@@ -218,7 +218,7 @@ function matchGolden(
   const rel = path.relative(process.cwd(), golden);
   if (!fs.existsSync(golden)) {
     assert.fail(
-      `No golden ${rel}. Generate it with: bin/e2e test --browser=${browser} --ref=<baseline commit> --update-goldens`,
+      `No golden ${rel}. Generate it from a reviewed commit with: bin/e2e test --browser=${browser} --ref=<commit> --update-goldens`,
     );
   }
   if (fs.readFileSync(golden).equals(png)) return;

@@ -70,23 +70,33 @@ check-e2e-firefox: build-dbg
 .PHONY: check-e2e-firefox
 
 # Builds E2E_REF once (cached per resolved commit, inside the bind-mounted repo
-# so it survives between containers) and runs this checkout's Firefox tests
-# against that build.  node_modules/ is gitignored, so git and Prettier skip the
-# cache.  The cache is keyed by the full hash so a branch name or HEAD can't go
-# stale, and a build only counts once .e2e-built exists: dist/ appears early, so
-# an interrupted build would otherwise be reused as if it were complete.
+# so it survives between containers) and runs this checkout's tests against that
+# build in E2E_BROWSER.  node_modules/ is gitignored, so git and Prettier skip
+# the cache.  The cache is keyed by the full hash so a branch name or HEAD can't
+# go stale, and a build only counts once its .e2e-built-<target> marker exists:
+# the output directory appears early, so an interrupted build would otherwise be
+# reused as if it were complete.  The marker is per build target, so a commit's
+# Firefox and Chrome builds share one clone and are cached side by side.  A
+# commit from before Chrome could load the extension still builds, but Chrome
+# rejects it and the run fails at launch.
+E2E_BROWSER ?= firefox
+
 check-e2e-ref:
 	@test -n "$(E2E_REF)" || { echo "Set E2E_REF=<commit>" >&2; exit 1; }
-	@sha="$$(git rev-parse --verify --quiet "$(E2E_REF)^{commit}")" || { \
+	@case "$(E2E_BROWSER)" in \
+	  firefox) build=build-dbg; out=dist ;; \
+	  chrome) build=build-chrome-dbg; out=dist-chrome ;; \
+	  *) echo "E2E_BROWSER must be firefox or chrome" >&2; exit 1 ;; \
+	esac; \
+	sha="$$(git rev-parse --verify --quiet "$(E2E_REF)^{commit}")" || { \
 	  echo "E2E_REF does not resolve to a commit: $(E2E_REF)" >&2; exit 1; }; \
 	dir="node_modules/.cache/e2e-ref/$$sha"; \
-	test -e "$$dir/.e2e-built" || ( \
-	  rm -rf "$$dir" && \
-	  git clone --quiet . "$$dir" && \
+	test -e "$$dir/.e2e-built-$$build" || ( \
+	  { test -d "$$dir/.git" || { rm -rf "$$dir" && git clone --quiet . "$$dir"; }; } && \
 	  git -C "$$dir" checkout --quiet "$$sha" && \
-	  $(MAKE) -C "$$dir" build-dbg && \
-	  touch "$$dir/.e2e-built" ) && \
-	TZ=UTC E2E_BROWSER=firefox E2E_DIST="$$dir/dist" node --test e2e/tests/*/suite.cts
+	  $(MAKE) -C "$$dir" $$build && \
+	  touch "$$dir/.e2e-built-$$build" ) && \
+	TZ=UTC E2E_BROWSER=$(E2E_BROWSER) E2E_DIST="$$dir/$$out" node --test $(E2E_SPECS)
 .PHONY: check-e2e-ref
 
 fix-style: node_modules

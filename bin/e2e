@@ -16,9 +16,12 @@ Commands:
 
 Test options:
   --browser=<name>    Required: firefox or chrome
-  --ref=<commit>      Build <commit> (cached per commit) and run this
-                      checkout's tests against that build instead of the
-                      working tree.  Firefox only.
+  --ref=<commit>      Build <commit> for the chosen browser (cached per
+                      commit) and run this checkout's tests against that
+                      build instead of the working tree.  Firefox goldens
+                      come from upstream 622bf3d; Chrome goldens come from a
+                      pinned commit of this fork, since upstream has no
+                      Chrome build that loads.
   --update-goldens    Write golden screenshots instead of comparing them.
                       Needs --ref, so goldens only come from a commit.
 
@@ -30,6 +33,7 @@ Examples:
   bin/e2e test --browser=firefox --ref=622bf3d
   bin/e2e test --browser=firefox --ref=622bf3d --update-goldens
   bin/e2e test --browser=chrome
+  bin/e2e test --browser=chrome --ref=<commit> --update-goldens
 EOF
 }
 
@@ -53,17 +57,11 @@ run_test() {
     [ -n "$browser" ] || die "--browser=firefox or --browser=chrome is required"
     [ "$update" = 0 ] || [ -n "$ref" ] || die "--update-goldens needs --ref=<commit>"
 
-    if [ "$browser" = chrome ]; then
-        [ -z "$ref" ] && [ "$update" = 0 ] ||
-            die "--ref and --update-goldens are Firefox-only for now"
-        exec "$ROOT/bin/dev" run make check-e2e-chrome
-    fi
-
     if [ -n "$ref" ]; then
         exec "$ROOT/bin/dev" run env UPDATE_SCREENSHOTS="$update" \
-            make check-e2e-ref E2E_REF="$ref"
+            make check-e2e-ref E2E_REF="$ref" E2E_BROWSER="$browser"
     fi
-    exec "$ROOT/bin/dev" run make check-e2e-firefox
+    exec "$ROOT/bin/dev" run make "check-e2e-$browser"
 }
 
 case "${1:-help}" in
