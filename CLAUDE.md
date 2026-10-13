@@ -84,8 +84,8 @@ RFCs live in [rfcs/](rfcs/).
 
 <!-- rfc-index:start -->
 
-| #    | Title                                                     | Status |
-| ---- | --------------------------------------------------------- | ------ |
-| 0001 | Support Google Chrome via a separate Manifest V3 manifest | draft  |
+| #    | Title                                                      | Status |
+| ---- | ---------------------------------------------------------- | ------ |
+| 0001 | Support Google Chrome via a generated Manifest V3 manifest | draft  |
 
 <!-- rfc-index:end -->

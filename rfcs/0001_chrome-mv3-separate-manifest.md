@@ -1,4 +1,4 @@
-# RFC 0001: Support Google Chrome via a separate Manifest V3 manifest
+# RFC 0001: Support Google Chrome via a generated Manifest V3 manifest
 
 - Status: draft
 - Author(s): Chris Coetzee, Claude
@@ -22,6 +22,15 @@ Chrome users, and developers testing Tab Stash's experimental Chrome port, can n
 - points the toolbar icons at `icons/logo-{16,32,64}.svg`. Those files don't exist, because the build produces only `logo.svg` and PNGs (`Makefile:174-180`). Chrome doesn't support SVG icons anyway [R19].
 
 The output still says `"manifest_version": 2`. No Chrome release target exists. `rel` (`Makefile:58`), `pkg-webext` (`:104`) and `build-rel` (`:152-160`) are Firefox-only.
+
+**Prior art: PR #711.** In July 2026 an AI-assisted PR proposed a Chrome MV3 port [R23]. The maintainer reviewed it and closed it in October 2026 after it went stale. His review sets the bar for this RFC:
+
+- Generate the Chrome manifest from `assets/manifest.json` with a small Node script, so permission changes carry over automatically. Don't add a second manifest.
+- Use the existing Makefile build, helpers and Chrome-specific code paths.
+- No `<any>` casts.
+- Don't skip `navigator.storage.persist()` without showing that deleted items stay safe.
+
+`CLAUDE.md` records these preferences in full.
 
 **What the background does.** UI pages build their own tabs, bookmarks, options and containers models directly from browser APIs (`src/globals-ui.ts:61-93`). They depend on the background for three things:
 
@@ -72,7 +81,7 @@ Five smaller breakages:
    - every context menu, including the toolbar right-click menu.
 2. The Firefox build stays MV2. `assets/manifest.json` and the shipped Firefox behaviour do not change.
 3. Both builds come from one source tree and one background entry point (`src/index.ts`).
-4. The Chrome manifest lives in its own file, readable without running a script.
+4. The Chrome manifest is generated from `assets/manifest.json`, so changes to it reach Chrome without anyone remembering to update a second file [R23].
 5. The Chrome build keeps working when Chrome stops the idle service worker between events and starts it again.
 
 ## Non-goals
@@ -89,13 +98,13 @@ Five smaller breakages:
 
 We propose three changes:
 
-1. Add a static MV3 manifest for Chrome.
+1. Generate an MV3 manifest for Chrome from the Firefox manifest.
 2. Make the shared background tolerate restarts. On Firefox this is a refactor with no visible change.
 3. Add Chrome-only code paths that are inert on Firefox.
 
-### 1. A separate Chrome manifest: `manifest-chrome.json`
+### 1. Generate the Chrome manifest from the Firefox one
 
-This new file replaces `patch-manifest-for-chrome.js`. It is a complete, hand-maintained MV3 manifest. It lives at the repository root, next to the build script, and not in `assets/`: the build copies all of `assets/**` into the Firefox package. The sketch below uses comments for explanation; the real file is plain JSON.
+`patch-manifest-for-chrome.js` already reads `assets/manifest.json`, mutates it and prints the result. That's the approach the maintainer asked for [R23]. We extend it to emit MV3, so the Firefox manifest stays the single source of truth: version, permissions, locales and commands carry over automatically. Its output for the current Firefox manifest:
 
 ```jsonc
 {
@@ -103,10 +112,10 @@ This new file replaces `patch-manifest-for-chrome.js`. It is a complete, hand-ma
   "minimum_chrome_version": "148", // native browser.* namespace [R12]
   "default_locale": "en",
   "name": "__MSG_extensionName__",
-  "version": "0.0", // replaced at build time, see below
+  "version": "3.5", // from manifest.json
   "description": "__MSG_extensionDescription__",
   "homepage_url": "https://josh-berry.github.io/tab-stash/",
-  "icons": {"16": "icons/logo-16.png", "...": "same as Firefox"},
+  "icons": {"16": "icons/logo-16.png", "...": "unchanged from manifest.json"},
   "permissions": [
     "sessions",
     "tabs",
@@ -131,31 +140,31 @@ This new file replaces `patch-manifest-for-chrome.js`. It is a complete, hand-ma
     "extension_pages": "script-src 'self'; object-src 'self';",
   },
   "commands": {
-    "_execute_action": {"suggested_key": {"default": "Alt+Shift+T"}},
+    "_execute_action": {
+      "suggested_key": {"default": "Alt+Shift+T", "mac": "MacCtrl+Shift+T"},
+    },
   },
 }
 ```
 
-Compared with today's patched output:
+Changes to the script, compared with today's output:
 
-- **Background.** `background.service_worker` replaces `background.scripts` [R3].
-- **Toolbar button.** `action` and `_execute_action` replace `browser_action` and `_execute_browser_action` [R7].
-- **Security policy.** The content security policy becomes an object [R15].
-- **Icons.** They point at PNGs the build already produces (`TOOLBAR_ICONS`, `Makefile:178-180`). This fixes today's paths to non-existent SVGs. `theme_icons` goes, because Chrome doesn't support it [R16].
-- **Permissions.** `alarms` is added. `cookies` is dropped: no code calls `browser.cookies`, and `cookieStoreId` is read only from Firefox tabs and containers (`src/model/tabs.ts:243`, `src/model/containers.ts:84`).
+- **Manifest version.** It sets `manifest_version: 3` and `minimum_chrome_version: "148"`, and drops `browser_specific_settings`, which is Firefox-only.
+- **Background.** `background.scripts: [x]` becomes `background.service_worker: x` [R3]. The script throws unless there is exactly one background script.
+- **Toolbar button.** `browser_action` becomes `action`, without `theme_icons` (Chrome doesn't support it [R16]) or `browser_style` [R7].
+- **Commands.** `_execute_browser_action` becomes `_execute_action`. As today, the sidebar and page-action commands are dropped, and any other command passes through.
+- **Security policy.** The content security policy string becomes `{extension_pages: <string>}` [R15].
+- **Icons.** `action.default_icon` points at `icons/logo-{16,32,64}.png`, which the build already produces (`TOOLBAR_ICONS`, `Makefile:178-180`). This fixes today's paths to non-existent SVGs [R19].
+- **Permissions.** `cookies` joins the dropped Firefox-only permissions, and `alarms` is added. No code calls `browser.cookies`; `cookieStoreId` is read only from Firefox tabs and containers (`src/model/tabs.ts:243`, `src/model/containers.ts:84`).
+- **Options page.** `options_ui.browser_style` is dropped. `open_in_tab` stays `true`, as today.
+
+Like today's script, it throws if a key it expects is missing, so a change to the Firefox manifest's shape fails the build instead of producing a broken Chrome manifest.
 
 **The background bundle needs no format change.** Vite already emits `src/index.ts` as one self-contained file: the built `dist/index.js` contains no `import` or `export` statements and no dynamic imports. It therefore runs as a classic worker script.
 
-**The version has one source of truth.** `assets/manifest.json` stays the only place the version is set. A short Node script, `build-chrome-manifest.js`, replaces the 26-line patch script. It:
-
-- reads `manifest-chrome.json`;
-- overwrites its `version` with Firefox's;
-- fails if any file the manifest references is missing from the output directory;
-- writes the result to `dist-chrome/manifest.json`.
-
 **Makefile changes:**
 
-- `build-chrome-dbg` runs `build-chrome-manifest.js` in place of `patch-manifest-for-chrome.js`.
+- `build-chrome-dbg` keeps running `patch-manifest-for-chrome.js` as today.
 - A new `build-chrome-rel` target does the same for release builds.
 - A new `pkg-chrome` target zips the release build into `releases/tab-stash-chrome-X.XX.zip`.
 - `rel` stays Firefox-only until the maintainer decides to ship Chrome.
@@ -215,7 +224,12 @@ If the model fails to load, queued events are never handled. Today's code behave
 - **Failure handling.** If `openDB` fails, every request rejects with that error, and `KVSClient` retries with backoff (`src/datastore/kvs/client.ts:101-123`).
 - **Firefox timing.** The favicons model writes to its store while it is constructed, so the databases still open at startup.
 
-**d. Guard `navigator.storage.persist()`.** In `src/datastore/kvs/service.ts:24-25`, call `persisted()`/`persist()` only when `persist` exists. In Chrome's service worker it doesn't [R14], and Chrome's `unlimitedStorage` permission already "exempts extensions from both quota restrictions and eviction" [R18]. Firefox's behaviour is unchanged.
+**d. Guard `navigator.storage.persist()`.** In `src/datastore/kvs/service.ts:24-25`, call `persisted()`/`persist()` only when `persist` exists. In Chrome's service worker it doesn't [R14]. Firefox's behaviour is unchanged.
+
+The maintainer asked why this check was needed and worried that deleted items "could spontaneously be lost" [R23]. The answer:
+
+- **Why the check.** `persist()` is a Window-only API, and MDN says it is "not available in Web Workers" [R14]. Without the check, opening all three stores would throw in Chrome's service worker.
+- **Why the data stays safe.** The Chrome build keeps the `unlimitedStorage` permission. Chrome documents that this permission "exempts extensions from both quota restrictions and eviction" [R18], which is the protection `persist()` exists to provide.
 
 **e. Alias the toolbar-button namespace.** Add `const action = browser.action ?? browser.browserAction` and use it everywhere the code uses `browser.browserAction`:
 
@@ -254,7 +268,7 @@ Each of these is gated so that Firefox's MV2 build never runs it:
 
 | Concern                 | Firefox today          | Firefox after                    | Chrome after                          |
 | ----------------------- | ---------------------- | -------------------------------- | ------------------------------------- |
-| Manifest                | `manifest.json`        | unchanged                        | `manifest-chrome.json` (MV3)          |
+| Manifest                | `manifest.json`        | unchanged                        | generated from `manifest.json` (MV3)  |
 | Background lifetime     | persistent page        | persistent page                  | service worker, stopped when idle     |
 | Waking listeners        | after model load       | top-level, sync                  | top-level, sync                       |
 | Handler with model      | synchronous            | synchronous (gesture rules kept) | async on cold wake, sync while warm   |
@@ -268,7 +282,7 @@ Each of these is gated so that Firefox's MV2 build never runs it:
 
 ## Alternatives considered
 
-**Keep generating the Chrome manifest from the Firefox one.** We could extend `patch-manifest-for-chrome.js` to emit MV3. The script would then have to rewrite the background, action, commands, the security policy, permissions and icons, which is more transformation than content. A reviewer could no longer see what Chrome receives without running it. Today's script already hides one bug that way: it points the icons at files that don't exist. We chose a static file and accepted the drift risk (see Tradeoffs). Copying only the version keeps the one field that must match automatic.
+**A separate, hand-maintained Chrome manifest.** A static `manifest-chrome.json` would show exactly what Chrome receives without running a script. PR #711 took this approach, and the maintainer asked for the manifest to be generated instead: the Firefox manifest "does change occasionally (e.g. for permissions and whatnot) and I'd like those changes to carry over to Chrome automatically" [R23]. A second file would drift.
 
 **One MV3 manifest for both browsers.** A single manifest can declare both `background.scripts` and `background.service_worker`, and each browser uses the one it supports [R4]. This moves Firefox to MV3, which breaks Goal 2: background lifetime changes for every Firefox user, and so do MV3's host-permission rules [R17]. Firefox gives no reason to switch now [R2].
 
@@ -283,7 +297,7 @@ Each of these is gated so that Firefox's MV2 build never runs it:
 - **Firefox carries refactoring risk for a Chrome feature.**
   - **The risk.** Section 2 changes listener and startup order in `src/index.ts` and `src/service-model.ts`. Both are excluded from coverage (`c8 ignore`). A mistake ships to every Firefox user, and the gesture rule in 2a is easy to break silently.
   - **Mitigation.** Phase 0 validates the whole stack in Chrome before any of it, including the Firefox refactor, is submitted upstream. Phase 1 lands Section 2 alone, with a behavioural checklist and a named rollback.
-- **The two manifests will drift.** A new permission, command or locale key added to `manifest.json` won't reach `manifest-chrome.json` unless someone remembers. A `check-manifests` target could diff the permission and command lists (see Open questions). `build-chrome-manifest.js` catches only missing files.
+- **The generator must keep up with the Firefox manifest's shape.** If someone adds a Firefox-only key, it reaches Chrome unless the script removes it. Chrome warns about unknown keys and refuses invalid ones on load, so Phase 3's "loads with no errors" check catches this. The script already throws when a key it rewrites is missing.
 - **Every cold wake rebuilds the whole model.** The first click or reconnect after 30 seconds idle runs, before the extension acts:
   - `tabs.query({})` and `tabGroups.query` (`src/model/tabs.ts:280-325`);
   - a bookmark subtree walk (`src/model/bookmarks.ts:172-176`);
@@ -333,11 +347,10 @@ Each of these is gated so that Firefox's MV2 build never runs it:
 **Phase 2: Chrome manifest, build targets and Chrome-only paths.**
 
 - **Work:**
-  - add `manifest-chrome.json` and `build-chrome-manifest.js`, and delete `patch-manifest-for-chrome.js`;
+  - extend `patch-manifest-for-chrome.js` to emit MV3;
   - add Section 3;
   - update `build-chrome-dbg`, and add `build-chrome-rel` and `pkg-chrome`.
 - **Exit criteria:**
-  - `build-chrome-manifest.js` reports no missing files;
   - `dist-chrome/` loads unpacked in current stable Chrome with no errors on `chrome://extensions` or in the service worker console;
   - the toolbar icon renders.
 
@@ -361,7 +374,7 @@ Phases 1–3 are separate PRs. If Phase 2 or 3 stalls, Phase 1 still stands, bec
 - **Chrome loads:** `make build-chrome-dbg` produces an extension that current stable Chrome loads without errors, with a visible toolbar icon.
 - **Chrome works:** every Goal 1 item works in Chrome, both from a cold start and after a forced worker stop.
 - **GC:** the `gc` alarm exists and its `scheduledTime` does not move across worker stops.
-- **Cleanup:** `patch-manifest-for-chrome.js` no longer exists.
+- **Generated manifest:** `dist-chrome/manifest.json` is generated from `assets/manifest.json`, with no second manifest file in the repository.
 - **Latency:** cold wake-to-action latency is recorded in this RFC. Phase 0 gates on 1 second; no bound is promised after that.
 
 ## Security, privacy, operational impact
@@ -387,11 +400,11 @@ Phases 1–3 are separate PRs. If Phase 2 or 3 stalls, Phase 1 still stands, bec
 ## Open questions
 
 1. **Does the maintainer want to support Chrome at all?** See Precondition. _Resolve in RFC_, before any implementation.
-2. **Should the version be stamped into the Chrome manifest or checked for equality?** Stamping (proposed) needs no extra step at release. A check keeps `manifest-chrome.json` fully static. _Resolve in RFC._
+2. **Should the version be stamped into the Chrome manifest or checked for equality?** Resolved: neither is needed, because the manifest is generated from `assets/manifest.json` (Section 1).
 3. **Does an open but idle `runtime.connect` port keep a Chrome extension service worker alive?** Chrome documents only that sending messages does [R5]. This decides how often open pages hit the reconnect path. _Resolve in Phase 0._
 4. **How slow is a cold wake, and how often does it happen?** _Resolve in Phase 0_, with the 1-second gate.
 5. **Does Chrome need the `cookies` permission?** Resolved: no. See Section 1.
-6. **Should a `check-manifests` target guard against drift?** _Resolve in implementation._ Cheap if wanted.
+6. **Should a `check-manifests` target guard against drift?** Resolved: no. A generated manifest cannot drift (Section 1).
 7. **Does Chrome's MV3 accept the `browser_action` menu context, or only `action`?** Chrome's reference lists `action` [R22]; we have not confirmed whether `browser_action` is rejected. Section 3a maps it either way. _Resolve in Phase 0._
 8. **Do Chrome's context menus and `setPopup` persist across worker restarts?** Unverified [R7] [R22]. Sections 3a and 3b re-apply both on each wake, so the design doesn't depend on the answer. If they do persist, re-applying them is optional. _Resolve in implementation._
 9. **Can `action.openPopup()` run on Chrome without a user gesture?** It is needed for "show popup" from a context menu after a cold wake. Chrome's reference mentions only policy-installed restrictions for Chrome 118–126 [R7]. _Resolve in Phase 0._
@@ -432,6 +445,8 @@ All external claims were checked on 2026-10-13. Third-party sources are marked a
 - **[R20]** Chrome, "Events in service workers": handlers must be declared in the global scope so "they are registered synchronously on initial script execution, which enables Chrome to dispatch events to the service worker as soon as it starts". https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/events
 - **[R21]** chromium-extensions mailing list, a Chrome team member on keep-alive techniques (a mailing-list post, not a published policy). https://groups.google.com/a/chromium.org/g/chromium-extensions/c/7Ag1vPlb_qU
 - **[R22]** Chrome, `chrome.contextMenus`: `action` "applies to the context menu of the extension's action (its toolbar icon)". The page says nothing about whether menus persist across restarts. https://developer.chrome.com/docs/extensions/reference/api/contextMenus
+
+- **[R23]** josh-berry/tab-stash PR #711, "Add Chrome Manifest V3 support", and the maintainer's review (July 2026; closed as stale on 2026-10-07). https://github.com/josh-berry/tab-stash/pull/711
 
 Code references are to commit `6df8b7f` on branch `chore/chriscz`:
 
