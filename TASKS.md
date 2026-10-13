@@ -19,21 +19,6 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Fix:** add `break;` after `model.attempt(commands.show_popup);`.
 - **Status:** open, not reported.
 
-### The options page's coupling watchers never fire
-
-- **Where:** `src/options/index.vue:527-560`, the `watch` block.
-- **What:** the watchers are keyed on top-level names such as
-  `browser_action_show`, but the component's `data()` only has `sync` and
-  `local` (`options()`, lines 494-508). Vue never calls them.
-- **Effect:** the intended couplings don't happen. For example, choosing
-  "popup" for the toolbar button should set the toolbar's stash action to
-  "none".
-- **Found:** code survey for RFC 0002, 2026-10-13. Confirmed by reading;
-  not yet reproduced in a browser.
-- **Fix:** key the watchers on `"sync.browser_action_show"` etc. (or watch
-  the model state directly), then check each coupling still makes sense.
-- **Status:** open, not reported.
-
 ## Fixed in this fork
 
 ### Chrome rejects dotted plural message keys
@@ -130,3 +115,20 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Fix:** this commit's fix, which also runs `close_removed_bookmarks` on
   `browser.bookmarks.onCreated`, so the set includes new bookmarks. E14
   checks it.
+
+### The options page's coupling watchers never fire
+
+- **Where:** `src/options/index.vue`, the `watch` block.
+- **What:** the watchers were keyed on top-level names such as
+  `browser_action_show`, but the component's `data()` only has `sync` and
+  `local`, so Vue never called them. They have been dead since `cd4b51f`
+  (2022-11), which moved the data into `sync` and `local`.
+- **Effect:** none a user can see. `552a485` and `1ed0f4d` disable the
+  options that would trigger each coupling (`canBrowserActionStash()` and
+  `canBrowserActionShow()` in `src/model/options.ts`), so the page can't
+  reach the inconsistent states the watchers were written to fix.
+- **Found:** code survey for RFC 0002, 2026-10-13. Confirmed in Firefox:
+  forcing each trigger value through script left the other setting
+  unchanged, and each trigger option is disabled on the page.
+- **Fix:** this commit, which removes the dead watchers. E22 checks the
+  rule that made them redundant.
