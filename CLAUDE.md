@@ -5,10 +5,44 @@ contributions and the `Co-Authored-By:` line on every AI-assisted commit and PR.
 
 ## Maintainer preferences
 
-These come from @josh-berry's review of the closed Chrome MV3 PR
-([#711](https://github.com/josh-berry/tab-stash/pull/711), July 2026). He
-is "willing to try [AI contributions] as an experiment". Changes should be
-minimally intrusive and build on what is already there.
+These come from @josh-berry's comments on the Chrome port issue
+([#52](https://github.com/josh-berry/tab-stash/issues/52), 2020–2026) and
+his review of the closed Chrome MV3 PR
+([#711](https://github.com/josh-berry/tab-stash/pull/711), July 2026).
+
+### Chrome support, in his words (#52)
+
+- **The real barrier is popups, not MV3 or the sidebar.** In Chrome, a popup
+  closes as soon as the active tab changes, which stops any operation still
+  running in it (e.g. "stash all open tabs"). Reliable Chrome support means
+  moving all tab, window and bookmark changes out of the UI into the
+  background, through new NanoServices and refactored models. He calls this
+  "the single biggest barrier" and doesn't think LLMs can do this kind of
+  "subtle, far-reaching" rework.
+- **He wants the popup view kept.** Dropping it would lower the technical bar,
+  but he sees the choice of UI views as part of what makes Tab Stash special.
+- **He prefers small, independent PRs towards Chrome compatibility.** Examples
+  he gave: moving to Manifest V3, making `browser.*` usage work on both
+  browsers, and small cross-browser fixes such as styling or layout. Frame
+  work as one of these steps, not as "Chrome support".
+- **Test thoroughly before sending a PR.** He warns that MV3 has "subtle
+  differences that could cause unpredictable breakage".
+- **Check for semantic differences between the browsers' APIs** (bookmarks in
+  particular), and check that the UI renders correctly in Chrome on Windows,
+  macOS and Linux.
+- **A full port is an ongoing commitment.** He'll merge it, help, and handle
+  publishing only if someone commits to maintaining it and works closely with
+  him from the start. He is a Firefox user and doesn't run Chrome day to day.
+- **A human must own every PR.** Even when AI helped, he wants a person to
+  sign off that the work is theirs, that they reviewed and tested it, and that
+  they'll put their name on it (in the spirit of the Developer Certificate of
+  Origin). He has raised ethical and copyright concerns about LLM-written code.
+  By July 2026 he was "willing to try [AI contributions] as an experiment",
+  under the rules in `AGENTS.md`.
+
+### How he reviews changes (#711)
+
+Changes should be minimally intrusive and build on what is already there.
 
 - **Reuse what exists before adding anything.** The codebase already has
   Chrome-friendly code, including a Chrome build. Find it and extend it. Don't
