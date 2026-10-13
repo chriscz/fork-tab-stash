@@ -1092,6 +1092,40 @@ describe("model", () => {
       ]);
     });
 
+    it("copies only the tabs a move would stash", async () => {
+      const stash_page = await browser.tabs.create({
+        windowId: env.windows.real.id,
+        url: browser.runtime.getURL("stash-list.html"),
+        active: false,
+      });
+      await events.next(browser.tabs.onCreated);
+      await events.next(browser.tabs.onUpdated); // loaded
+
+      const p = env.model.putItemsInFolder({
+        items: env.model.copyIfStashable(true, [
+          env.model.tabs.tab(stash_page.id as TabID)!, // unstashable URL
+          env.model.tabs.tab(env.tabs.real_harry.id)!, // hidden
+          env.model.tabs.tab(env.tabs.real_bob.id)!,
+        ]),
+        toFolder: env.model.bookmarks.folder(env.bookmarks.names.id)!,
+        toIndex: 2,
+      });
+      await events.next(browser.bookmarks.onCreated);
+      await p;
+
+      const real_folder = await browser.bookmarks.getChildren(
+        env.bookmarks.names.id,
+      );
+      expect(real_folder.map(c => c.url)).to.deep.equal([
+        `${B}#doug`,
+        `${B}#helen`,
+        `${B}#bob`,
+        `${B}#patricia`,
+        `${B}#nate`,
+      ]);
+      expect(env.model.tabs.tab(env.tabs.real_bob.id)!.hidden).to.be.false;
+    });
+
     it("moves tabs and bookmarks into the folder", async () => {
       const p = env.model.putItemsInFolder({
         items: [

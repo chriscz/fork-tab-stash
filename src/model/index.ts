@@ -377,6 +377,20 @@ export class Model {
     return !url_str.startsWith(browser.runtime.getURL("stash-list.html"));
   }
 
+  /** Will `putItemsInFolder()` stash this tab, or skip it?  It skips hidden
+   * tabs and tabs whose URL is not `isURLStashable()`. */
+  isTabStashable(t: Tabs.Tab): boolean {
+    return !t.hidden && this.isURLStashable(t.url);
+  }
+
+  /** `copyIf()` for items going into a folder.  A copied tab is just a title
+   * and URL, so `putItemsInFolder()` can no longer tell whether to skip it;
+   * tabs it would skip are left out before they are copied. */
+  copyIfStashable(predicate: boolean, items: StashItem[]): StashItem[] {
+    if (!predicate) return items;
+    return copying(items.filter(i => !isTab(i) || this.isTabStashable(i)));
+  }
+
   /** Should this tab be visible in the UI, and is its URL in the stash
    * (excluding the Tab Stash tab and invalid tabs)?
    *
@@ -547,7 +561,7 @@ export class Model {
     if (items.length === 0) return;
 
     await this.putItemsInFolder({
-      items: copyIf(!!options.copy, items),
+      items: this.copyIfStashable(!!options.copy, items),
       toFolder: await this.createStashFolder(undefined, options.parent),
     });
   }
@@ -868,7 +882,7 @@ export class Model {
       // If it's a tab or group, check if it's actually stashable and mark it
       // for closure if so; otherwise exclude it.
       if (isTab(item)) {
-        if (!item.hidden && this.isURLStashable(item.url)) {
+        if (this.isTabStashable(item)) {
           close_tabs.push(item);
         } else {
           continue;
@@ -876,8 +890,8 @@ export class Model {
       }
       if (isTabGroupExtent(item)) {
         // We need to check stashability of the children.
-        const stashable_children = item.children.filter(
-          c => !c.hidden && this.isURLStashable(c.url),
+        const stashable_children = item.children.filter(c =>
+          this.isTabStashable(c),
         );
         if (stashable_children.length === 0) continue;
 

@@ -1,21 +1,23 @@
 id: E04
 title: Copying keeps tabs open
+upstream-bug: Alt-clicking "Stash all" copies the Tab Stash page too
 given:
   - Three local pages are open in the window, and the stash is empty.
 when:
   - The user Alt-clicks "Stash all" in the open-tabs section of the stash list.
 then:
-  - A new folder in "Tab Stash" holds the three pages, in tab order.
+  - A new folder in "Tab Stash" holds exactly the three pages, in tab order.
   - The three tabs are still visible and not marked as hidden by Tab Stash.
 notes: |
   Alt makes "Stash all" copy instead of move (window.vue).
-  Copying also puts the Tab Stash page itself into the folder (copying() skips
-  the isURLStashable check), which is a bug, so the folder step looks only at
-  the three local pages and their order, and does not assert the folder's
-  full contents.
-  Mutation check: in src/stash-list/window.vue:471, change
-  `copyIf(ev.altKey, to_stash)` to `to_stash`, so Alt-click moves instead of
-  copying; the "still visible" step fails.
+  A copied tab is only a title and URL, so the copy must leave out the tabs a
+  move would skip, such as the Tab Stash page itself. On 622bf3d it doesn't:
+  the folder step fails with stash-list.html ahead of the three pages.
+  Mutation checks, in stash() in src/stash-list/window.vue:
+  - Change `the.model.copyIfStashable(ev.altKey, to_stash)` to
+    `copyIf(ev.altKey, to_stash)`; the folder step fails the same way.
+  - Change it to plain `to_stash`, so Alt-click moves instead of copying; the
+    "still visible" step fails.
   On Chrome, tabMarker is always false (Chrome has no session values to
   mark tabs with), so only the "still visible" part of the last step can
   fail there.

@@ -650,7 +650,7 @@ export default defineComponent({
       the.model.attempt(
         async () =>
           await the.model.putItemsInFolder({
-            items: copyIf(ev.altKey, items),
+            items: the.model.copyIfStashable(ev.altKey, items),
             toFolder: this.folder,
           }),
       );

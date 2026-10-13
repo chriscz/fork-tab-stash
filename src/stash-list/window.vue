@@ -468,7 +468,7 @@ export default defineComponent({
 
         if (to_stash.length === 0) return;
         await the.model.putItemsInFolder({
-          items: copyIf(ev.altKey, to_stash),
+          items: the.model.copyIfStashable(ev.altKey, to_stash),
           toFolder: await the.model.createStashFolder(),
         });
       });
