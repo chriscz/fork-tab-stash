@@ -193,21 +193,21 @@ Suites are TypeScript, run by Node's built-in test runner (`node:test`, `node:as
 - **Errors.** After the last step it asserts that the driver collected no errors.
 - **Self-test.** The runner has its own `node:test` file. It checks that a missing function, an unused function, duplicate text and a failing `given` each fail.
 
-`js-yaml` is pinned in `install-test-deps.sh` next to Puppeteer, so it stays a test-only tool and out of `package.json`. Phase A verifies that it resolves through `NODE_PATH` from `.cts` files.
+`js-yaml` is pinned in `install-test-deps.sh` next to Puppeteer, so it stays a test-only tool and out of `package.json`. The runner loads it explicitly from the global install. The repo's own `node_modules` holds an unpinned copy that a dev dependency pulls in, and Node would otherwise prefer that copy over `NODE_PATH`, as the Phase A review found.
 
 **The driver** (`driver.cts`) is the only API suites use. It fills in what Puppeteer can't do in each browser, so suites never call BiDi, CDP or Firefox internals (`Services`, `gBrowser`) themselves:
 
-| Driver method                                            | Firefox adapter                                                          | Chrome adapter                                         |
-| -------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `open(page, query?)`                                     | raw BiDi `browsingContext.navigate` to the pinned `moz-extension://` URL | `page.goto("chrome-extension://<id>/…")`               |
-| `eval(js)`, `click(sel, mods?)`, `waitFor(js)`           | BiDi `script.evaluate` in the page                                       | `page.evaluate`, `page.click`, `page.waitForFunction`  |
-| `openPages(n)`, `pageUrls(n)`                            | tabs on the local HTTP server                                            | same                                                   |
-| `stash()`, `tabs(query)`, `tabMarker(id)`, `seed(state)` | the page's own `browser.bookmarks`/`tabs`/`sessions`/`storage`           | same, through `page.evaluate`                          |
-| `showAllFolders()`                                       | scrolls each folder into view, so lazy children render (`load-more.vue`) | same                                                   |
-| `screenshot()`                                           | `drawSnapshot` from the chrome context, encoded as PNG                   | `page.screenshot()`                                    |
-| `errors()`                                               | Firefox's console service plus `error_log`                               | `pageerror` events plus `error_log`                    |
-| `restartBackground()`                                    | reloads the add-on (Open question 2)                                     | `WebWorker.close()`, then waits for the worker to wake |
-| `setClock(iso)`                                          | overrides `Date` in the page (see below)                                 | `page.evaluateOnNewDocument`                           |
+| Driver method                                                         | Firefox adapter                                                          | Chrome adapter                                         |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `open(page)` (the page may carry a query, e.g. `stash-list.html?q=x`) | raw BiDi `browsingContext.navigate` to the pinned `moz-extension://` URL | `page.goto("chrome-extension://<id>/…")`               |
+| `eval(js)`, `click(sel, mods?)`, `waitFor(js)`, `waitUntil(fn)`       | BiDi `script.evaluate` in the page                                       | `page.evaluate`, `page.click`, `page.waitForFunction`  |
+| `openPages(n)`, `pageUrls(n)`                                         | tabs on the local HTTP server                                            | same                                                   |
+| `stash()`, `tabs(query)`, `tabMarker(id)`, `seed(state)`              | the page's own `browser.bookmarks`/`tabs`/`sessions`/`storage`           | same, through `page.evaluate`                          |
+| `showAllFolders()`                                                    | scrolls each folder into view, so lazy children render (`load-more.vue`) | same                                                   |
+| `screenshot()`                                                        | `drawSnapshot` from the chrome context, encoded as PNG                   | `page.screenshot()`                                    |
+| `errors()`                                                            | Firefox's console service plus `error_log`                               | `pageerror` events plus `error_log`                    |
+| `restartBackground()` (Phase C, not built yet)                        | reloads the add-on (Open question 2)                                     | `WebWorker.close()`, then waits for the worker to wake |
+| the pinned date (the spec's `clock`, applied by `launch`)             | overrides `new Date()` in the page after each load (see below)           | `page.evaluateOnNewDocument`                           |
 
 **Shared setup** (`fixtures.cts`). Common `given` steps live here as named functions: `threeOpenPages`, and `stashedThreePages` ("after E2"). Specs that start "after E2" bind to the fixture rather than depend on another test, so every test still runs on its own in a fresh browser.
 
@@ -227,8 +227,8 @@ Tests about hiding tabs keep the default `after_stashing_tab: "hide"`.
 - **Settle wait:** a short wait before each capture.
 - **A pinned date,** for specs that set `clock`. The driver makes `new Date()` with no arguments return that instant, so dates Tab Stash creates, such as folder names (`Saved 1/1/2026, 9:00:00 AM`), render the same on every run.
   - **`Date.now()` keeps running.** Tab Stash times its own waits with it, e.g. a 20 ms loop when it creates the stash folder (`src/model/bookmarks.ts:616`). Freezing it deadlocked the stash in Phase A, so only the current date is pinned. Anything Tab Stash stamps with `Date.now()` still gets the real time.
-  - **Page only.** The clock is frozen in the page only. Bookmarks' `dateAdded` still comes from the browser's real clock, so the clock stays off in specs whose behaviour compares the two, such as E3's "folder under 5 minutes old".
-  - **Installing it early.** Chrome installs the clock before the page's scripts run. Firefox has no preload hook for extension pages, so Phase A must prove the clock can be installed before the first render, e.g. by navigating with `wait: "none"` or from the chrome context. If it can't, screenshots of views with generated times are dropped from those specs.
+  - **Page only.** The date is pinned in the page only. Bookmarks' `dateAdded` still comes from the browser's real clock, so the clock stays off in specs whose behaviour compares the two, such as E3's "folder under 5 minutes old".
+  - **Installing it early.** Chrome installs the pin before the page's scripts run. Firefox has no preload hook for extension pages, so the Firefox adapter installs it right after each load. Phase A showed that this is enough when the dated item is created after load (E02), but not for dates a page computes at first render, such as Deleted Items' day headers (Open question 1).
 
 ### 3. The test catalogue
 
@@ -301,13 +301,14 @@ Before and after, in the Makefile:
 E2E_DIST ?= dist
 
 check-e2e-firefox: build-dbg
-	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/*.test.cts e2e/tests/*/suite.cts
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts e2e/tests/*/suite.cts
 
 # Builds E2E_REF once and runs this checkout's suite against that build.  The
 # cache is keyed by the resolved commit hash (a branch name can't go stale),
 # lives in the bind-mounted repo so it survives between containers, and only
 # counts once .e2e-built exists, so an interrupted build is redone.
 check-e2e-ref:
+	@test -n "$(E2E_REF)" || { echo "Set E2E_REF=<commit>" >&2; exit 1; }
 	@sha="$$(git rev-parse --verify --quiet "$(E2E_REF)^{commit}")" || { \
 	  echo "E2E_REF does not resolve to a commit: $(E2E_REF)" >&2; exit 1; }; \
 	dir="node_modules/.cache/e2e-ref/$$sha"; \
@@ -366,7 +367,8 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
   - An upstream UI refactor could break many tests at once. `data-test` attributes would fix this, but they touch upstream UI code (Open question 3).
 - **Timing.** Folders render their children on intersection, search waits 250 ms, and the undo notification lasts 8 seconds. The driver polls with bounded waits. The three-run rule catches flakiness, at the cost of runtime.
 - **The pinned date is partial.** It covers `new Date()` in the page only. `Date.now()` and browser timestamps stay real, so views showing times stamped from those can't be screenshotted deterministically. Specs that compare page time with browser timestamps can't use it either. Firefox may also not allow installing it before the first render (Open question 1).
-- **Goldens churn and add binaries.** An intentional UI change invalidates the affected goldens, which then need regenerating and reviewing. Each PNG is about 15–20 KB.
+- **Goldens churn and add binaries.** An intentional UI change invalidates the affected goldens, which then need regenerating and reviewing. So does a version bump, because the stash list's footer shows the version. Each PNG is about 15–20 KB.
+- **Goldens are tied to the machine type.** Byte-for-byte goldens depend on software rendering and the Firefox build, so goldens made on x86_64 won't match an arm64 host, such as Colima on Apple silicon. Goldens are generated on x86_64. Running screenshot steps elsewhere needs its own goldens or a tolerance (Open questions).
 - **Each sentence is written twice,** once in YAML and once in the suite. The runner catches mismatches, but rewording a step means editing two files.
 - **The image grows slightly.** It's 2.67 GB today; this adds one test-only npm package (`js-yaml`). The suite is fork tooling, not proposed upstream unless the maintainer asks.
 
@@ -382,7 +384,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
   - `bin/e2e`, and the `check-e2e-firefox` and `check-e2e-ref` changes;
   - specs and suites for E1 (the smoke test, moved), E2 and E8, with E2's goldens generated from the baseline.
 - **Proofs needed in this phase:**
-  - Can the frozen clock be installed before Firefox renders (Open question 1)?
+  - Can the pinned date be installed before Firefox renders (Open question 1)?
   - Do exact screenshot matches hold across runs?
   - Does `js-yaml` resolve from `.cts` files?
   - Test time per test, measured to check the budget.
@@ -407,7 +409,7 @@ Recorded on 2026-10-13 at commit `d1aa9a0`.
 - **Mutation checks**, each failing the expected step:
   - E01: deleting `dist/stash-list.js` fails "The stash list renders."
   - E02: an early return in `hide()` (`src/model/tabs.ts`) fails "The three tabs are hidden and marked as hidden by Tab Stash."
-  - E08: removing `@activate="onDeleteNotifActivated"` (`src/stash-list/index.vue:40`) fails the restore step.
+  - E08: removing `@activate="onDeleteNotifActivated"` (`src/stash-list/index.vue:41`) fails the restore step.
 - **Neutral suites:** `grep -rE "connection\.send|Services\.|gBrowser" e2e/tests` finds nothing.
 - **Speed:** test time was 8.0–8.6 s per run. `node --test` runs each spec file in its own process, concurrently, so the three specs took about as long as the slowest one. Even run one at a time, at roughly 3 s per spec (Firefox start, install, steps), 18 specs come to about a minute, well inside the five-minute budget.
 - **What Phase A changed in the design:**
@@ -415,6 +417,8 @@ Recorded on 2026-10-13 at commit `d1aa9a0`.
   - **The driver waits before seeding.** It waits for the background to record its version, because a fresh install rewrites the local options.
   - **E8 checks the folder, not the position.** Undo appends the bookmark to its folder (`622bf3d` does too).
   - **The reference build is cached per commit hash,** with a completion marker.
+  - **`js-yaml` is loaded from the global install.** The final review found the repo's unpinned copy was being used instead; the runner now loads the pinned 5.4.3 explicitly. Puppeteer wasn't affected.
+  - **Screenshot steps wait for the state they show to settle.** E02 waits for the tabs to be hidden before capturing.
 
 **After this RFC.** RFC 0001 adds the Chrome adapter, runs the specs with `browser: chrome` steps, and records a parity table. If a core scenario fails on Chrome in a way that needs architectural change, that becomes a further Chrome RFC, as RFC 0001's Rollout says.
 
