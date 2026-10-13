@@ -1110,6 +1110,8 @@ Phase B covers E3–E7, E9, E11 and E19. Phase C covers E10, E12–E18, E20 and 
 
 ### Task 6: E14, E15 and E20, removed bookmarks and pinned tabs
 
+> **Outcome:** E14 is deferred. It fails on upstream `622bf3d` because the background never refreshes its stashed-URL snapshot on bookmark creation (see `TASKS.md` and the RFC's Phase C). Only E15 and E20 landed.
+
 **Files:** create `e2e/tests/e14-removed-bookmark-closes-hidden-tab/`, `e2e/tests/e15-pinned-left-out/` and `e2e/tests/e20-pinned-included-with-option/`.
 
 - [ ] **Step 1: E14**

@@ -124,7 +124,7 @@ The format:
 
 - **Fields:** `id`, `title`, `given`, `when`, `then`, `notes`, and optionally `browser`.
 - **Steps.** Every `given`, `when` and `then` entry is a plain string, or an object with a `step` and any of these keys:
-  - **`browser`** (`firefox` or `chrome`) limits the step to that browser. This is how a spec states browser differences, right where they happen. A step without it applies to both browsers. A top-level `browser` limits the whole test (e.g. E14, which needs hidden tabs).
+  - **`browser`** (`firefox` or `chrome`) limits the step to that browser. This is how a spec states browser differences, right where they happen. A step without it applies to both browsers. A top-level `browser` limits the whole test (e.g. E21, since only Firefox has a sidebar).
   - **`screenshot`** captures the page after the step and compares it with a golden. Goldens are stored per browser, under `screenshots/<browser>/`. The value is one of:
     - `true`, which names the golden after the step's position, `then-<n>.png`, counting every `then` step from 1 whatever its `browser`, so the name is the same in both browsers;
     - a file name, stored as `<name>.png`;
@@ -250,7 +250,7 @@ Each row seeds one `spec.yml`. Once the spec exists, the spec is the authority a
 | E11 | Rename a folder                                   | click the folder title, type, press Enter                                                          | the bookmark folder's title has changed                                                                                                                                                       | identical                                                   |
 | E12 | Stashing a duplicate URL moves it                 | seed a folder with URL X; stash a tab with URL X into it                                           | still exactly one bookmark for X                                                                                                                                                              | identical                                                   |
 | E13 | Search filters the stash                          | open `stash-list.html?q=<term>`                                                                    | only matching folders and bookmarks are shown; the others are hidden or marked `.no-match`; screenshot (seeded data)                                                                          | identical                                                   |
-| E14 | Removing a stashed bookmark closes its hidden tab | `given.stashedThreePages`; remove one bookmark with `browser.bookmarks.remove` (as in the Library) | the matching hidden tab is closed by the background's bookmark-removal listener (`src/index.ts`, `close_removed_bookmarks`)                                                                   | not applicable: whole spec is `browser: firefox`            |
+| E14 | Removing a stashed bookmark closes its hidden tab | `given.stashedThreePages`; remove one bookmark with `browser.bookmarks.remove` (as in the Library) | the matching hidden tab is closed by the background's bookmark-removal listener (`src/index.ts`, `close_removed_bookmarks`). **Deferred:** fails on upstream (see below)                      | not applicable: whole spec is `browser: firefox`            |
 | E15 | Pinned tabs are left out of "Stash all"           | pin a tab (setup); stash all                                                                       | the pinned tab is skipped and stays open, pinned and visible                                                                                                                                  | identical                                                   |
 | E16 | Privileged URLs restore through the redirect page | seed a bookmark for `about:robots`; restore it                                                     | a tab opens at `restore.html?url=about%3Arobots`                                                                                                                                              | identical for `about:`; a `chrome:` URL would open directly |
 | E17 | Options persist                                   | select `#after_stashing_tab_close` on `options.html`; reload the page                              | the radio is still selected, and `storage.local` has the value                                                                                                                                | identical                                                   |
@@ -266,7 +266,7 @@ Some scenarios act, check, and act again, e.g. delete a folder, see it listed, r
 - **Drive the UI, assert on the browser.** Actions go through the page's buttons, links and inputs. State comes from `browser.bookmarks`, `browser.tabs`, `browser.sessions` and `browser.storage`. Tests read the DOM only to check what the user sees.
 - **Allowed non-UI actions.** Only these may bypass the UI, and each is a stand-in for something a user does outside Tab Stash's pages:
   - `seed()`, which sets up state;
-  - `browser.bookmarks.remove` in E14, as the user would in the Library;
+  - `browser.bookmarks.remove` in E14 (deferred), as the user would in the Library;
   - `restartBackground()` in E10.
   - pinning a tab in a `given` step (E15, E20), as the user would from the tab's menu;
   - seeding a bookmark with a custom URL (E16).
@@ -406,6 +406,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
 **Phase C: the rest** (E10, E12–E18, E20, E21).
 
 - **Fallback for E10:** if `restartBackground()` can't be made reliable on Firefox (Open question 2), E10 is dropped from this RFC and noted in `TASKS.md`.
+- **E14 is deferred.** It fails on upstream `622bf3d`: the background snapshots the stash's URLs at startup and refreshes them on bookmark change, move and remove, but not on create. A page stashed after startup is never in the snapshot, so removing its bookmark closes nothing. Making E14 pass would mean a `given` step that leans on the bug (e.g. renaming a bookmark first). The bug is in `TASKS.md`; E14 lands once the fix does, and it then serves as the fix's regression test.
 - **Exit criteria:** the same as Phase A, and the whole suite's test time is under five minutes.
 
 ### Phase A results
