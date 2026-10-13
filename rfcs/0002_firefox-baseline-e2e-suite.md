@@ -269,51 +269,57 @@ Each row seeds one `spec.yml`. Once the spec exists, the spec is the authority a
 
 ### 5. Running it, and proving the baseline
 
+**The baseline** is upstream's own code, unmodified, at a pinned commit: **`622bf3d`**, the one verified in Background. A test is trusted only once it passes there: if it fails against upstream's untouched code, the test is wrong, not Tab Stash. The golden screenshots also come from that build, so our branch is compared with how upstream actually looks. We move the pinned commit on purpose, in its own commit, after pulling upstream and regenerating the goldens.
+
 **`bin/e2e` is the entrypoint.** It's a small shell script, separate from `bin/dev` so that `bin/dev` stays a generic Docker wrapper. It turns a few flags into the right Makefile target and environment, and runs it in the dev image through `bin/dev run`:
 
 ```
-bin/e2e test --browser=firefox                    # suite against this checkout
-bin/e2e test --browser=firefox --baseline         # suite against the pinned upstream build
-bin/e2e test --browser=firefox --baseline=<ref>   # ... or another upstream commit
-bin/e2e test --browser=firefox --baseline --update-goldens   # regenerate goldens
-bin/e2e test --browser=chrome                     # the Chrome smoke test, for now
+bin/e2e test --browser=firefox                        # test this checkout
+bin/e2e test --browser=firefox --ref=622bf3d          # build 622bf3d, test that
+bin/e2e test --browser=firefox --ref=622bf3d --update-goldens   # regenerate goldens
+bin/e2e test --browser=chrome                         # the Chrome smoke test, for now
 bin/e2e help
 ```
 
-- **`--browser` is required.** `--baseline` and `--update-goldens` are Firefox-only, because upstream has no Chrome build to take a baseline from.
+- **`--browser` is required.**
+- **`--ref=<commit>`** checks out and builds that commit (cached per commit), then runs _this_ checkout's tests against _that_ build. Any commit works: the pinned upstream one, an older commit of ours, or a branch.
+- **`--update-goldens`** requires `--ref`, so goldens can't be regenerated from uncommitted or branch changes by accident.
+- **Firefox only, for now.** Both flags apply to Firefox only, because upstream has no Chrome build.
 - **The Makefile targets stay the real logic,** so there's still one build system. `bin/e2e` only chooses among them.
 
 Before and after, in the Makefile:
 
-| Target               | Today                                         | After                                                                        |
-| -------------------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
-| `check-e2e`          | runs `check-e2e-chrome` + `check-e2e-firefox` | unchanged                                                                    |
-| `check-e2e-chrome`   | the Chrome smoke test                         | unchanged until RFC 0001 adds the Chrome adapter                             |
-| `check-e2e-firefox`  | `e2e/firefox.test.cjs`                        | the runner self-test plus `e2e/tests/*/suite.cts`; the smoke test becomes E1 |
-| `check-e2e-baseline` | —                                             | new: the Firefox suite against the pinned upstream build                     |
+| Target              | Today                                         | After                                                                        |
+| ------------------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
+| `check-e2e`         | runs `check-e2e-chrome` + `check-e2e-firefox` | unchanged                                                                    |
+| `check-e2e-chrome`  | the Chrome smoke test                         | unchanged until RFC 0001 adds the Chrome adapter                             |
+| `check-e2e-firefox` | `e2e/firefox.test.cjs`                        | the runner self-test plus `e2e/tests/*/suite.cts`; the smoke test becomes E1 |
+| `check-e2e-ref`     | —                                             | new: the Firefox suite against the build of `E2E_REF`                        |
 
 ```make
 E2E_DIST ?= dist
-BASELINE_REF ?= 622bf3d
-BASELINE_DIR = node_modules/.cache/e2e-baseline/$(BASELINE_REF)
+E2E_REF_DIR = node_modules/.cache/e2e-ref/$(E2E_REF)
 
 check-e2e-firefox: build-dbg
 	TZ=UTC E2E_DIST=$(E2E_DIST) node --test e2e/harness/*.test.cts e2e/tests/*/suite.cts
 
-# Builds BASELINE_REF once (cached per commit, inside the bind-mounted repo
-# so it survives between containers) and runs this checkout's suite on it.
-check-e2e-baseline:
-	test -d $(BASELINE_DIR)/dist || ( \
-	  git clone --quiet . $(BASELINE_DIR) && \
-	  git -C $(BASELINE_DIR) checkout --quiet $(BASELINE_REF) && \
-	  $(MAKE) -C $(BASELINE_DIR) build-dbg )
-	TZ=UTC E2E_DIST=$(BASELINE_DIR)/dist node --test e2e/tests/*/suite.cts
+# Builds E2E_REF once (cached per commit, inside the bind-mounted repo so it
+# survives between containers) and runs this checkout's suite against it.
+check-e2e-ref:
+	test -n "$(E2E_REF)" || { echo "Set E2E_REF=<commit>" >&2; exit 1; }
+	test -d $(E2E_REF_DIR)/dist || ( \
+	  git clone --quiet . $(E2E_REF_DIR) && \
+	  git -C $(E2E_REF_DIR) checkout --quiet $(E2E_REF) && \
+	  $(MAKE) -C $(E2E_REF_DIR) build-dbg )
+	TZ=UTC E2E_DIST=$(E2E_REF_DIR)/dist node --test e2e/tests/*/suite.cts
 ```
 
-- **The baseline is pinned** to the upstream commit we verified (`622bf3d`), not to whatever local `master` points at. We move it on purpose, in its own commit, after pulling upstream and regenerating the goldens. `node_modules/` is gitignored, so Prettier and git ignore the cached clone. The first baseline build takes a few minutes (`npm clean-install`); later runs reuse it.
-- **Golden screenshots:** `bin/e2e test --browser=firefox --baseline --update-goldens` writes them from the baseline build (it sets `UPDATE_SCREENSHOTS=1` for `check-e2e-baseline`). Our branch must then match them. A branch that changes Firefox's UI on purpose regenerates the affected goldens in the same PR, and the reviewer approves the image diff. Nothing in RFC 0001 should change Firefox's UI, so for now the goldens are always the baseline's.
+- **The reference build is cached.** `node_modules/` is gitignored, so Prettier and git ignore the cached clone. The first build of a commit takes a few minutes (`npm clean-install`); later runs reuse it.
+- **Golden screenshots:** `bin/e2e test --browser=firefox --ref=622bf3d --update-goldens` writes them from the baseline build (it sets `UPDATE_SCREENSHOTS=1`). Our branch must then match them.
+  - A branch that changes Firefox's UI on purpose regenerates the affected goldens in the same PR, and the reviewer approves the image diff.
+  - Nothing in RFC 0001 should change Firefox's UI, so for now the goldens are always the baseline's.
 - **A test is accepted only if:**
-  - it passes against the baseline, and the whole suite then passes three consecutive runs;
+  - it passes against the baseline (`--ref=622bf3d`), and the whole suite then passes three consecutive runs;
   - it passes against our branch (no Firefox regression);
   - its `notes` mutation check makes it fail.
 
@@ -369,7 +375,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
   - the driver and the Firefox adapter;
   - `fixtures.cts`;
   - `js-yaml` in `install-test-deps.sh`;
-  - `bin/e2e`, and the `check-e2e-firefox` and `check-e2e-baseline` changes;
+  - `bin/e2e`, and the `check-e2e-firefox` and `check-e2e-ref` changes;
   - specs and suites for E1 (the smoke test, moved), E2 and E8, with E2's goldens generated from the baseline.
 - **Proofs needed in this phase:**
   - Can the frozen clock be installed before Firefox renders (Open question 1)?
@@ -415,7 +421,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
 
 - **Maintenance:** the main ongoing cost is keeping specs, suites and goldens in step with UI changes.
 - **Upgrades:** browser upgrades mean bumping the three pinned versions together and regenerating the goldens.
-- **Baseline cache:** moving `BASELINE_REF` triggers one rebuild of the baseline.
+- **Reference cache:** each new `--ref` commit is built once and then reused.
 - **Runtime:** it doesn't change how Tab Stash itself is built or released.
 
 ## Open questions
