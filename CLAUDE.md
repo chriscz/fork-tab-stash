@@ -94,5 +94,6 @@ RFCs live in [rfcs/](rfcs/).
 | #    | Title                                                      | Status |
 | ---- | ---------------------------------------------------------- | ------ |
 | 0001 | Support Google Chrome via a generated Manifest V3 manifest | draft  |
+| 0002 | A Firefox-baseline end-to-end test suite                   | draft  |
 
 <!-- rfc-index:end -->
