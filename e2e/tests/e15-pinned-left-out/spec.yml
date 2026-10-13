@@ -1,0 +1,20 @@
+id: E15
+title: Pinned tabs are left out of "Stash all"
+given:
+  - Three local pages are open, and Page 1 is pinned.
+when:
+  - The user clicks "Stash all" in the open-tabs section of the stash list.
+then:
+  - The new stash folder holds Page 2 and Page 3 only.
+  - Page 1 is still open, pinned and visible.
+notes: |
+  stash_include_pinned defaults to false (src/model/options.ts). Pinning
+  Page 1 in the given step is an allowed non-UI setup action.
+  The open-tabs "Stash all" button filters pinned tabs itself (stash() in
+  src/stash-list/window.vue); it doesn't go through stashAllTabsInWindow.
+  The when step waits only for the new folder; the then step waits for
+  Pages 2 and 3 to leave the window, after which the folder is final, since
+  Tab Stash puts the bookmarks in place before hiding the tabs.
+  Mutation check: in src/stash-list/window.vue:465, replace
+  `!the.model.options.sync.state.stash_include_pinned` with `false`, so
+  pinned tabs are always stashed; the "Page 2 and Page 3 only" step fails.

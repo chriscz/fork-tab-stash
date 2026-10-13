@@ -48,6 +48,29 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Fix:** filter the tabs with `isURLStashable()` before copying.
 - **Status:** open, not reported.
 
+### Removing a newly stashed bookmark leaves its hidden tab open
+
+- **Where:** `src/index.ts:477-508`, `close_removed_bookmarks` and its
+  listeners.
+- **What:** the background keeps `managed_urls`, the stash's URLs, and closes
+  hidden tabs whose URL leaves that set. It refreshes the set only on
+  `bookmarks.onChanged`, `onMoved` and `onRemoved`, not on `onCreated`. URLs
+  stashed since the background started, or since the last such event, are
+  not in the set.
+- **Effect:** stash tabs, then delete one of the new bookmarks in Firefox's
+  Library: its hidden tab stays open, hidden, with nothing in the stash to
+  restore it. Hidden tabs pile up, which is what the listener exists to stop.
+  Any rename, move or removal in the stash first refreshes the set, after
+  which removals close tabs as intended.
+- **Found:** writing the end-to-end spec for removing a stashed bookmark
+  (E14), 2026-10-13. Fails on 622bf3d in Firefox: after "Stash all" of three
+  pages, `browser.bookmarks.remove` on Page 1's bookmark leaves its hidden
+  tab open for 30 s. Renaming Page 2's bookmark between the two makes Page 1's
+  tab close.
+- **Fix:** also listen to `browser.bookmarks.onCreated`, so the set includes
+  new bookmarks.
+- **Status:** open, not reported.
+
 ### A deleted-items unit test fails about once in a thousand runs
 
 - **Where:** `src/model/deleted-items.test.ts:337-348`, "only loads new items
