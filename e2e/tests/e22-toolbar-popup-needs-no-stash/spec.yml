@@ -1,0 +1,27 @@
+id: E22
+title: The toolbar button can't show the popup while it also stashes
+given:
+  - The toolbar button is set to stash all tabs and show the stash in a tab.
+when:
+  - The user opens Tab Stash's options page.
+then:
+  - The "popup" choice for what the toolbar button shows is disabled.
+notes: |
+  The two choices are <select>s whose ids are the storage keys,
+  browser_action_stash and browser_action_show, with one <option> per
+  value. Each option is disabled by model.canBrowserActionStash() or
+  model.canBrowserActionShow() (src/model/options.ts). Showing the popup
+  only makes sense when the toolbar stashes nothing, so "popup" is
+  disabled while browser_action_stash is anything else.
+  The when step waits for the page to show the seeded choices, so the
+  disabled state is read after the options have loaded. The then step
+  also checks that "tab" is enabled, so a page that disables everything
+  fails.
+  This rule replaced the page's old coupling watchers, which reset the
+  stash action to "none" when "popup" was chosen; a user can't choose it.
+  The converse (stash choices other than "none" are disabled while the
+  toolbar shows the popup) is the same rule and isn't tested separately.
+  Passes on upstream 622bf3d.
+  Mutation check: in src/model/options.ts:238, replace
+  `return browserActionStash === "none";` with `return true;`, so
+  "popup" is always enabled; the "popup" then step fails.
