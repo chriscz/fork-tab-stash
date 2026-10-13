@@ -63,6 +63,30 @@ welcome). Here's what you need to do:
    - (release builds only) `releases/tab-stash-src-X.XX-hhhhhhh.tar.gz`: A clean
      git checkout of the source tree for the release (also for uploading to AMO)
 
+### Building with Docker
+
+If you have Docker, you can skip installing dependencies. The provided
+`Dockerfile` builds an Ubuntu image with everything `install-deps.sh` installs.
+Your source tree is mounted into the container, so build artifacts end up in the
+same places as above:
+
+```sh
+bin/dev image build   # build (or rebuild) the image
+bin/dev run make      # or `make rel` for a release version
+bin/dev shell         # open a temporary shell in the container
+```
+
+Run `bin/dev help` to see all commands.
+
+To use Docker directly instead of `bin/dev`:
+
+```sh
+docker build -t tab-stash-dev .
+docker run --rm -it -u "$(id -u):$(id -g)" -v "$PWD":/src tab-stash-dev make
+```
+
+Replace `make` with `make rel` to build a release version.
+
 ## Want to help out?
 
 If you're interested in contributing to Tab Stash, be sure to read [the

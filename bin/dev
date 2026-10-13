@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Run Tab Stash's build tools inside the dev Docker image (see Dockerfile).
+
+set -euo pipefail
+
+IMAGE=tab-stash-dev
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+    cat <<EOF
+Usage: bin/dev <command> [args...]
+
+Commands:
+  image <subcommand>  Manage the dev Docker image (see "Image commands" below)
+  shell               Open a temporary shell in the dev container
+  run <cmd...>        Run a single command in the dev container
+  help                Show this help
+
+The repo is mounted at /src and commands run as your user, so build output
+is owned by you. shell and run build the image first if it doesn't exist.
+
+Image commands:
+  image build         Build the image, or rebuild it after Dockerfile or
+                      install-deps.sh changes
+
+Examples:
+  bin/dev image build
+  bin/dev shell
+  bin/dev run make
+  bin/dev run make rel
+EOF
+}
+
+ensure_image() {
+    docker image inspect "$IMAGE" >/dev/null 2>&1 || image_build
+}
+
+image_build() {
+    docker build -t "$IMAGE" "$ROOT"
+}
+
+container() {
+    ensure_image
+    local tty=()
+    [ -t 0 ] && tty=(-t)
+    # HOME=/tmp: your UID has no home directory in the image, and npm needs one
+    docker run --rm -i "${tty[@]}" -u "$(id -u):$(id -g)" -e HOME=/tmp \
+        -v "$ROOT":/src "$IMAGE" "$@"
+}
+
+case "${1:-help}" in
+    image)
+        case "${2:-}" in
+            build) image_build ;;
+            *) usage >&2; exit 1 ;;
+        esac
+        ;;
+    shell) container bash ;;
+    run)
+        shift
+        [ $# -gt 0 ] || { usage >&2; exit 1; }
+        container "$@"
+        ;;
+    help | -h | --help) usage ;;
+    *) usage >&2; exit 1 ;;
+esac
