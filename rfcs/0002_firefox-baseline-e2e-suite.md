@@ -430,6 +430,44 @@ Recorded on 2026-10-13 at commit `d1aa9a0`.
   - **`js-yaml` is loaded from the global install.** The final review found the repo's unpinned copy was being used instead; the runner now loads the pinned 5.4.3 explicitly. Puppeteer wasn't affected.
   - **Screenshot steps wait for the state they show to settle.** E02 waits for the tabs to be hidden before capturing.
 
+### Phase B and C results
+
+Recorded on 2026-10-14 at commit `cd329c9`.
+
+- **Baseline:** `bin/e2e test --browser=firefox --ref=622bf3d` passed three consecutive runs, 123/123 checks each.
+- **Our branch:** `bin/e2e test --browser=firefox` passed three consecutive runs, 133/133 each, including the runner's 10 self-tests.
+- **Coverage:** 20 specs, E1–E21 except E14 (deferred, below).
+- **Speed:** test time was 60–70 s per run on our branch and 73–120 s on the baseline (one slow outlier), well inside the five-minute budget. E10's restart adds about 5 s.
+- **Screenshots:** the goldens for E02, E06, E09, E13, E18 and E21 were generated from `622bf3d` and matched byte for byte in every exit run. E09 masks its header date; E18 and E21 mask the search box, which those views focus, so its caret can't blink into the image.
+- **Neutral suites:** `grep -rE "connection\.send|Services\.|gBrowser" e2e/tests` finds nothing.
+- **Mutation checks**, each failing the step named in its spec's notes:
+  - E03: `if (true)` for the folder-age check (`src/model/index.ts:420`).
+  - E04: `to_stash` instead of `copyIf(ev.altKey, to_stash)` (`src/stash-list/window.vue:471`).
+  - E05 and E06: two edits to `moveLeaf`'s tab filter (`src/model/index.ts:1101`), one never reusing hidden tabs, one never reusing open ones.
+  - E07: a no-op `beforeClosing` for restore-and-remove (`src/stash-list/folder.vue:717`).
+  - E09: no `deleted_items.add` when deleting (`src/model/index.ts:1366`).
+  - E10: no IndexedDB `put` (`src/datastore/kvs/service.ts:122`); and, to prove the restart is real, deleting the database when a background starts (`:211`), which fails E10 but not E09.
+  - E11: no Enter handler on the rename input (`src/components/async-text-input.vue:16`).
+  - E12: never reuse an existing bookmark (`src/model/index.ts:892`).
+  - E13: render every folder whatever the search (`src/stash-list/folder-list.vue:65`).
+  - E15 and E20: force the pinned-tab filter off and on (`src/stash-list/window.vue:465`).
+  - E16: open `about:` URLs directly (`src/util/index.ts:126`).
+  - E17: the options page never shows stored values (`src/options/index.vue:486`).
+  - E18 and E21: no `data-view` on `<html>` (`src/launch-vue.ts:35`).
+  - E19: undelete never re-creates bookmarks (`src/model/index.ts:1453`).
+- **Deferred:** E14, because upstream never refreshes its stashed-URL snapshot on bookmark creation (Phase C above, and `TASKS.md`).
+- **Upstream bugs found,** recorded in `TASKS.md` and not encoded as expected behaviour:
+  - Alt-click "Stash all" also copies the Tab Stash page itself (E04 checks only the three pages, and says so).
+  - Removing a bookmark stashed after startup leaves its hidden tab open (E14).
+  - A unit test in `src/model/deleted-items.test.ts` fails about 0.1% of the time on random data.
+- **What Phases B and C changed in the design:**
+  - **`h.tabs({url})` matches URLs in the driver.** `browser.tabs.query` match patterns can't carry a port, so passing the URL through matched nothing.
+  - **`h.stash()` retries briefly,** since reading the stash can fail while the model is mid-update.
+  - **`open()` waits for the page to finish starting.** Reloading a page that was still starting made Firefox log "Promise resolved after context unloaded", failing the error check about once in four runs.
+  - **The Firefox adapter restarts the background through the add-on manager,** after moving the test's tab to `about:blank` (Open question 2).
+  - **`when` steps wait only for what they need,** and each `then` step waits for its own outcome, so a mutation fails the step it's about.
+  - **Several planned mutations were no-ops or unreachable** and were replaced; each spec's notes give the edit that was actually verified.
+
 **After this RFC.** RFC 0001 adds the Chrome adapter, runs the specs with `browser: chrome` steps, and records a parity table. If a core scenario fails on Chrome in a way that needs architectural change, that becomes a further Chrome RFC, as RFC 0001's Rollout says.
 
 **Rollback:** the suite is additive and fork-only. Removing `e2e/tests/`, `e2e/harness/`, `bin/e2e` and the target changes undoes it. The smoke test can be restored from git.
@@ -467,9 +505,9 @@ Recorded on 2026-10-13 at commit `d1aa9a0`.
    - **Masks alone work.** E02 with a masked folder title matched byte for byte in 6 of 6 runs across the baseline and our branch. Deleted Items, with its header date masked, matched in 3 of 3.
    - **The other options failed.** libfaketime stops Firefox from starting, and the in-page pin missed first-render dates.
    - **So screenshots mask times,** and the clock is left alone.
-2. **Can the Firefox adapter restart the background reliably?** That's needed for E10: `browser.runtime.reload()` from a page under BiDi's temporary install, or a reinstall that keeps the profile. _Resolve in Phase C_, with the E10 fallback.
+2. **Can the Firefox adapter restart the background reliably?** _Resolved in Phase C:_ yes. `browser.runtime.reload()` closes the add-on's tabs, and with the test's tab the only one, Firefox exits. Instead the adapter moves that tab to `about:blank` and reloads the add-on through the add-on manager from the chrome context. The add-on keeps its UUID, storage and IndexedDB, and E10 passed 10 consecutive runs on our branch and 6 on the baseline.
 3. **Should the suite add `data-test` attributes upstream to make selectors less fragile?** _Defer_ until selector breakage is a real cost, since it touches upstream UI code.
-4. **Do synthetic `MouseEvent`s with `altKey` reach the Vue handlers the same way real clicks do (E4)?** _Resolve in Phase B_, with the mutation check.
+4. **Do synthetic `MouseEvent`s with `altKey` reach the Vue handlers the same way real clicks do (E4)?** _Resolved in Phase B:_ yes. With `copyIf(ev.altKey, …)` replaced by a plain move, E4's "still visible" step fails, so the handler sees `altKey`.
 
 ## History
 
