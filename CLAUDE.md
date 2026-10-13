@@ -69,6 +69,11 @@ minimally intrusive and build on what is already there.
 6. **Close out** with `rfc-craft`: move the RFC to `in review`, then `accepted`,
    once the implementation is merged.
 
+**Never reference RFCs in code.** No RFC numbers, section references such as
+`§2a`, or links to `rfcs/` in source, comments, tests or build files. RFCs
+live in this fork and upstream readers won't have them. Comments explain why
+in their own words; the commit scope (`rfc-NNNN`) carries the link to the RFC.
+
 ## RFCs
 
 RFCs live in [rfcs/](rfcs/).
