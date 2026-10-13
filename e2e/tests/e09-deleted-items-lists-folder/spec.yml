@@ -22,7 +22,7 @@ notes: |
   Each day's header is the disabled .forest-title of a top-level li.folder
   (src/deleted-items/index.vue). It shows the real date, so the screenshot
   masks it by that selector, which matches only the headers.
-  Mutation check: in src/model/index.ts:1366, delete the line
+  Mutation check: in src/model/index.ts:1370, delete the line
   `await this.deleted_items.add(await toDelItem(node), undefined, deleted_at);`
   so deleting a folder doesn't record it in deleted items; "Deleted Items
   lists" fails.

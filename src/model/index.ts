@@ -831,14 +831,16 @@ export class Model {
 
     // Now, we move everything into the folder.  `to_index` is maintained as
     // the insertion point (i.e. the next inserted item should have index
-    // `to_index`).
+    // `to_index`), so it only advances when an item is actually placed.
+    // Skipped items must not advance it: Chrome rejects an index past the end
+    // of the folder, and in a non-empty folder items would land too late.
     const moved_items: Bookmarks.Node[] = [];
     const close_tabs: Tabs.Tab[] = [];
 
     for (
       let i = 0, to_index = options.toIndex ?? to_folder.children.length;
       i < items.length;
-      ++i, ++to_index, options.task && ++options.task.value
+      ++i, options.task && ++options.task.value
     ) {
       const item = items[i];
 
@@ -859,6 +861,7 @@ export class Model {
           // to_index.
           --to_index;
         }
+        ++to_index;
         continue;
       }
 
@@ -949,6 +952,7 @@ export class Model {
       }
       moved_items.push(node);
       dont_steal_bms.add(node.id);
+      ++to_index;
 
       // Update the selection state of the chosen bookmark to match the
       // original item's selection state.

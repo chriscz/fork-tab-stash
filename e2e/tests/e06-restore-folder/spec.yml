@@ -17,7 +17,7 @@ notes: |
   Restoring activates the last restored tab, so the screenshot step makes
   the test's tab active again (h.activate). The when step waits for every
   page to finish loading, so no loading icons reach the screenshot.
-  Mutation check: in src/model/index.ts:1101, replace
+  Mutation check: in src/model/index.ts:1105, replace
   `(t.hidden || t.position?.parent === to_parent)` with `t.hidden`, so
   moveLeaf never reuses a tab that is already open in the window; the
   "each open exactly once" step fails.

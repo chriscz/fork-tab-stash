@@ -19,6 +19,6 @@ notes: |
   Bookmarks are in place before the tab is hidden or closed, so the when
   step waits for Page 1 to leave the window and the bookmark check then
   reads the final folder.
-  Mutation check: in src/model/index.ts:892, replace
+  Mutation check: in src/model/index.ts:895, replace
   `"url" in item && !options.allowDuplicates` with `false`, so the existing
   bookmark is never reused; "still holds exactly one bookmark" fails.

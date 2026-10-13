@@ -1067,6 +1067,31 @@ describe("model", () => {
       ).to.deep.equal(urls);
     });
 
+    it("puts tabs at toIndex even if it skips earlier tabs", async () => {
+      const p = env.model.putItemsInFolder({
+        items: [
+          env.model.tabs.tab(env.tabs.real_harry.id)!, // hidden, so skipped
+          env.model.tabs.tab(env.tabs.real_bob.id)!,
+        ],
+        toFolder: env.model.bookmarks.folder(env.bookmarks.names.id)!,
+        toIndex: 2,
+      });
+      await events.next(browser.bookmarks.onCreated);
+      await events.next(browser.tabs.onUpdated);
+      await p;
+
+      const real_folder = await browser.bookmarks.getChildren(
+        env.bookmarks.names.id,
+      );
+      expect(real_folder.map(c => c.title)).to.deep.equal([
+        "Doug Duplicate",
+        "Helen Hidden",
+        `${B}#bob`,
+        "Patricia Pinned",
+        "Nate NotOpen",
+      ]);
+    });
+
     it("moves tabs and bookmarks into the folder", async () => {
       const p = env.model.putItemsInFolder({
         items: [

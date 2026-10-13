@@ -19,7 +19,7 @@ notes: |
   The last step reloads Deleted Items and waits for its footer to be
   "fully-loaded" (src/components/load-more.vue) before checking, so a list
   that hasn't loaded yet can't pass for one without "Old".
-  Mutation check: in src/model/index.ts:1453, delete the line
+  Mutation check: in src/model/index.ts:1457, delete the line
   `await this.putItemsInFolder({items: [item], toFolder, toIndex});`
   so undelete never re-creates the bookmarks; '"Old" is back in the stash'
   fails.
