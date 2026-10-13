@@ -15,24 +15,13 @@ export default class Service<K extends Proto.Key, V extends Proto.Value>
     NanoService<Proto.ClientMsg<K, V>, Proto.ServiceMsg<K, V>>
 {
   /* c8 ignore start -- opens a live IndexedDB, usable only in prod */
-  static async open<K extends Proto.Key, V extends Proto.Value>(
+  static open<K extends Proto.Key, V extends Proto.Value>(
     db_name: string,
     store_name: string,
-  ): Promise<Service<K, V>> {
-    // Magical incantation to make sure the browser doesn't spontaneously
-    // delete our store.
-    if (!(await navigator.storage.persisted())) {
-      await navigator.storage.persist();
-    }
-
-    return new Service(
-      await openDB(db_name, 1, {
-        upgrade(db, oldVersion, newVersion, txn) {
-          db.createObjectStore(store_name);
-        },
-      }),
-      store_name,
-    );
+  ): Service<K, V> {
+    // Opening is lazy so the caller can register the service (and accept
+    // connections) before the database is ready.
+    return new Service(openPersistentDB(db_name, store_name), store_name);
   }
   /* c8 ignore stop */
 
@@ -41,18 +30,18 @@ export default class Service<K extends Proto.Key, V extends Proto.Value>
   readonly onSet: Event<(entries: Proto.MaybeEntry<K, V>[]) => void>;
   readonly onSyncLost: Event<() => void>;
 
-  private _db: IDBPDatabase;
+  private _db: Promise<IDBPDatabase>;
   private _clients = new Set<Proto.ClientPort<K, V>>();
 
   /** We queue all write operations to the DB to avoid weirdnesses that seem to
    * happen with IndexedDB and concurrent transactions. */
   private _write_queue = new AsyncTaskQueue();
 
-  constructor(db: IDBPDatabase, store_name: string) {
+  constructor(db: IDBPDatabase | Promise<IDBPDatabase>, store_name: string) {
     this.name = store_name;
     this.onSet = event("KVS.Service.onSet", this.name);
     this.onSyncLost = event("KVS.Service.onSyncLost", this.name);
-    this._db = db;
+    this._db = Promise.resolve(db);
   }
 
   //
@@ -60,7 +49,7 @@ export default class Service<K extends Proto.Key, V extends Proto.Value>
   //
 
   async get(keys: K[]): Promise<Proto.Entry<K, V>[]> {
-    const txn = this._db.transaction(this.name);
+    const txn = (await this._db).transaction(this.name);
     const res: Proto.Entry<K, V>[] = [];
     for (const key of keys) {
       const value = await txn.store.get(key);
@@ -76,7 +65,7 @@ export default class Service<K extends Proto.Key, V extends Proto.Value>
     const b =
       bound !== undefined ? IDBKeyRange.lowerBound(bound, true) : undefined;
 
-    const txn = this._db.transaction(this.name);
+    const txn = (await this._db).transaction(this.name);
     let cursor = await txn.store.openCursor(b);
 
     const res: Proto.Entry<K, V>[] = [];
@@ -99,7 +88,7 @@ export default class Service<K extends Proto.Key, V extends Proto.Value>
     const b =
       bound !== undefined ? IDBKeyRange.upperBound(bound, true) : undefined;
 
-    const txn = this._db.transaction(this.name);
+    const txn = (await this._db).transaction(this.name);
     let cursor = await txn.store.openCursor(b, "prev");
 
     const res: Proto.Entry<K, V>[] = [];
@@ -128,7 +117,7 @@ export default class Service<K extends Proto.Key, V extends Proto.Value>
       /* c8 ignore next -- it's silly to set() with 0 entries */
       if (entries.length === 0) return;
 
-      const txn = this._db.transaction(this.name, "readwrite");
+      const txn = (await this._db).transaction(this.name, "readwrite");
       for (const {key, value} of entries) {
         if (value !== undefined) await txn.store.put(value, key);
         else await txn.store.delete(key);
@@ -148,7 +137,7 @@ export default class Service<K extends Proto.Key, V extends Proto.Value>
       const deletes: {key: K}[] = [];
 
       await this._write_queue.run(async () => {
-        const txn = this._db.transaction(this.name, "readwrite");
+        const txn = (await this._db).transaction(this.name, "readwrite");
         let cursor = await txn.store.openCursor();
 
         while (cursor) {
@@ -217,3 +206,27 @@ export default class Service<K extends Proto.Key, V extends Proto.Value>
     for (const c of this._clients) c.notify(msg);
   }
 }
+
+/* c8 ignore start -- opens a live IndexedDB, usable only in prod */
+async function openPersistentDB(
+  db_name: string,
+  store_name: string,
+): Promise<IDBPDatabase> {
+  // Magical incantation to make sure the browser doesn't spontaneously
+  // delete our store.  persist() doesn't exist in service workers (Chrome
+  // MV3), where the unlimitedStorage permission prevents eviction instead.
+  //
+  if (
+    "persist" in navigator.storage &&
+    !(await navigator.storage.persisted())
+  ) {
+    await navigator.storage.persist();
+  }
+
+  return await openDB(db_name, 1, {
+    upgrade(db, oldVersion, newVersion, txn) {
+      db.createObjectStore(store_name);
+    },
+  });
+}
+/* c8 ignore stop */
