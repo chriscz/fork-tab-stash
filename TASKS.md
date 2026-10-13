@@ -97,3 +97,29 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Found:** the Chrome end-to-end test, 2026-10-13.
 - **Fix:** `be0e7fc`, which uses `_` as the plural separator. Part of RFC 0001's
   stack.
+
+### Chrome refuses to open tabs when restoring
+
+- **Where:** `src/model/tabs.ts`, `Model.create()`.
+- **What:** the options passed to `browser.tabs.create` always had a
+  `cookieStoreId` key, `undefined` when no container was chosen. Chrome
+  rejects keys it doesn't know even when they're undefined
+  (`Unexpected property: 'cookieStoreId'`).
+- **Effect:** on Chrome, restoring a bookmark or folder opened nothing.
+  Firefox ignored the empty key. Upstream `622bf3d` has the same code.
+- **Found:** the Chrome end-to-end run of E06, E07 and E16, 2026-10-14.
+- **Fix:** `a962957`, which leaves the key out when it's undefined.
+
+### Stashing skips a position for every tab it leaves out
+
+- **Where:** `src/model/index.ts`, the loop in `Model.putItemsInFolder()`.
+- **What:** the insertion index advanced for every item, including the ones
+  the loop skips (hidden or unstashable tabs, empty tab groups).
+- **Effect:** on Chrome, "Stash all" did nothing: it skips the Tab Stash page,
+  so the first bookmark went to index 1 of an empty folder, which Chrome
+  rejects (`Index out of bounds.`). On Firefox, which clamps the index,
+  stashing at a chosen position in a non-empty folder (e.g. dragging a
+  selection that includes an unstashable tab) put the items one place too
+  late per skipped tab. Upstream `622bf3d` has the same code.
+- **Found:** the Chrome end-to-end run of E02, E05, E15 and E20, 2026-10-14.
+- **Fix:** `935731c`, which advances the index only when an item is placed.
