@@ -1250,11 +1250,7 @@ In both Firefox recipes, replace `e2e/firefox.test.cjs` with the suite globs. Th
 	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts e2e/tests/*/suite.cts
 ```
 
-And the last line of `check-e2e-ref` becomes:
-
-```make
-	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_REF_DIR)/dist node --test e2e/tests/*/suite.cts
-```
+In the `check-e2e-ref` recipe, change only the test files on its last line: replace `node --test e2e/firefox.test.cjs` with `node --test e2e/tests/*/suite.cts`. Leave its hash-keyed cache logic as it is.
 
 Then run `git rm e2e/firefox.test.cjs`. In `install-test-deps.sh`, change the final message to `echo ">>> All done!  Run the end-to-end tests with: bin/e2e test --browser=firefox"`.
 

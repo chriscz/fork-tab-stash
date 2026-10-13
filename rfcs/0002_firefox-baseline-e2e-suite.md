@@ -298,23 +298,26 @@ Before and after, in the Makefile:
 
 ```make
 E2E_DIST ?= dist
-E2E_REF_DIR = node_modules/.cache/e2e-ref/$(E2E_REF)
 
 check-e2e-firefox: build-dbg
-	TZ=UTC E2E_DIST=$(E2E_DIST) node --test e2e/harness/*.test.cts e2e/tests/*/suite.cts
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/*.test.cts e2e/tests/*/suite.cts
 
-# Builds E2E_REF once (cached per commit, inside the bind-mounted repo so it
-# survives between containers) and runs this checkout's suite against it.
+# Builds E2E_REF once and runs this checkout's suite against that build.  The
+# cache is keyed by the resolved commit hash (a branch name can't go stale),
+# lives in the bind-mounted repo so it survives between containers, and only
+# counts once .e2e-built exists, so an interrupted build is redone.
 check-e2e-ref:
-	test -n "$(E2E_REF)" || { echo "Set E2E_REF=<commit>" >&2; exit 1; }
-	test -d $(E2E_REF_DIR)/dist || ( \
-	  git clone --quiet . $(E2E_REF_DIR) && \
-	  git -C $(E2E_REF_DIR) checkout --quiet $(E2E_REF) && \
-	  $(MAKE) -C $(E2E_REF_DIR) build-dbg )
-	TZ=UTC E2E_DIST=$(E2E_REF_DIR)/dist node --test e2e/tests/*/suite.cts
+	@sha="$$(git rev-parse --verify --quiet "$(E2E_REF)^{commit}")" || { \
+	  echo "E2E_REF does not resolve to a commit: $(E2E_REF)" >&2; exit 1; }; \
+	dir="node_modules/.cache/e2e-ref/$$sha"; \
+	test -e "$$dir/.e2e-built" || ( \
+	  rm -rf "$$dir" && git clone --quiet . "$$dir" && \
+	  git -C "$$dir" checkout --quiet "$$sha" && \
+	  $(MAKE) -C "$$dir" build-dbg && touch "$$dir/.e2e-built" ) && \
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST="$$dir/dist" node --test e2e/tests/*/suite.cts
 ```
 
-- **The reference build is cached.** `node_modules/` is gitignored, so Prettier and git ignore the cached clone. The first build of a commit takes a few minutes (`npm clean-install`); later runs reuse it.
+- **The reference build is cached** per commit hash, with a completion marker. `node_modules/` is gitignored, so Prettier and git ignore the cached clone. The first build of a commit takes a few minutes (`npm clean-install`); later runs reuse it.
 - **Golden screenshots:** `bin/e2e test --browser=firefox --ref=622bf3d --update-goldens` writes them from the baseline build (it sets `UPDATE_SCREENSHOTS=1`). Our branch must then match them.
   - A branch that changes Firefox's UI on purpose regenerates the affected goldens in the same PR, and the reviewer approves the image diff.
   - Nothing in RFC 0001 should change Firefox's UI, so for now the goldens are always the baseline's.
