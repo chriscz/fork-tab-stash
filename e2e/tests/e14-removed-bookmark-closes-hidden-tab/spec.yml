@@ -1,0 +1,26 @@
+id: E14
+title: Removing a stashed bookmark closes its hidden tab
+browser: firefox
+upstream-bug: Removing a newly stashed bookmark leaves its hidden tab open
+given:
+  - Three pages were stashed with "Stash all".
+when:
+  - Page 1's bookmark is removed outside Tab Stash, as in Firefox's Library.
+then:
+  - Page 1's bookmark is gone and its hidden tab is closed.
+  - Page 2 and Page 3 are still stashed, open and hidden.
+notes: |
+  The background watches bookmark changes and closes hidden tabs whose URL
+  left the stash (close_removed_bookmarks in src/index.ts). Firefox only:
+  Chrome has no hidden tabs.
+  Removing the bookmark with browser.bookmarks.remove is an allowed non-UI
+  action: it is what the Library does. The background closes the tab
+  asynchronously, so the then steps wait for it.
+  On 622bf3d the "hidden tab is closed" step fails: the background refreshes
+  its set of stashed URLs on bookmark change, move and remove but not on
+  create, so pages stashed since it started aren't in the set.
+  Mutation checks, in src/index.ts:
+  - Remove the onCreated listener for close_removed_bookmarks; the "hidden
+    tab is closed" step fails.
+  - Replace `t.hidden && removed_urls.has(urlToOpen(t.url))` with `false`,
+    so no hidden tab is ever closed; the same step fails.

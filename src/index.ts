@@ -502,6 +502,9 @@ logErrorsFrom(async () => {
       }),
     );
 
+    // onCreated closes nothing itself, but keeps managed_urls up to date, so
+    // removing a bookmark stashed since startup closes its tab.
+    browser.bookmarks.onCreated.addListener(close_removed_bookmarks);
     browser.bookmarks.onChanged.addListener(close_removed_bookmarks);
     browser.bookmarks.onMoved.addListener(close_removed_bookmarks);
     browser.bookmarks.onRemoved.addListener(close_removed_bookmarks);
