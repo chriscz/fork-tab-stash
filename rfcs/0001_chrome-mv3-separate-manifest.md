@@ -383,6 +383,47 @@ Each of these is gated so that Firefox's MV2 build never runs it:
 - **Open-page check:** stop the worker with the stash list open, delete a bookmark, and confirm the deleted items page shows it.
 - **GC alarm check:** run `chrome.alarms.get("gc")` before and after a stop and wake, and confirm `scheduledTime` is unchanged.
 
+### Phase 3 parity results
+
+Recorded on 2026-10-14 at commit `aa98b75`, in the dev image (Chrome for Testing 155.0.8059.39, Firefox 157.0.1).
+
+- **Chrome:** `bin/e2e test --browser=chrome` passed three consecutive runs: the service-worker GC alarm test (1/1) and 117/117 spec checks, with E21 skipped. Each run took about 26 s.
+- **Firefox is unchanged:** `bin/e2e test --browser=firefox` passed three consecutive runs, 133/133, in 60–85 s, and `--ref=622bf3d` passed 123/123.
+- **Goldens:** Chrome's are generated from `bd2efa4` and checked by eye beside Firefox's. Byte-for-byte matching needs Chrome launched with `--disable-partial-raster`; without it, anti-aliased edges differed between runs.
+
+| Spec                                   | Chrome result                      | Chrome-only check and its mutation                                                                                                 |
+| -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| E01 install and stash list             | pass                               | none                                                                                                                               |
+| E02 stash all                          | pass after fix 2                   | tabs are closed; skipping `this.remove(tabs)` in `hide()`'s fallback fails it                                                      |
+| E03 stash one, twice                   | pass                               | tabs are closed; same mutation                                                                                                     |
+| E04 copy keeps tabs                    | pass                               | none (Chrome has no hidden marker, so only "still visible" can fail)                                                               |
+| E05 restore one bookmark               | pass after fix 2                   | a new active tab; restoring in the background fails it                                                                             |
+| E06 restore a folder                   | pass after fix 1                   | none                                                                                                                               |
+| E07 restore and remove                 | pass after fix 1                   | none                                                                                                                               |
+| E08 delete and undo                    | pass                               | none                                                                                                                               |
+| E09 deleted folder listed              | pass                               | none                                                                                                                               |
+| E10 deleted items survive a restart    | pass                               | the restart stops the service worker; deleting the database on start fails E10 but not E09                                         |
+| E11 rename a folder                    | pass                               | none                                                                                                                               |
+| E12 duplicate URL moves                | pass                               | the tab is closed; the `hide()` mutation                                                                                           |
+| E13 search filters                     | pass                               | none                                                                                                                               |
+| E14 removed bookmark closes hidden tab | deferred, as on Firefox            | —                                                                                                                                  |
+| E15 pinned tabs left out               | pass after fix 2                   | none                                                                                                                               |
+| E16 privileged URLs                    | pass after fix 1 and a Chrome step | Chrome stores `about:robots` as `chrome://robots/` and opens it directly; sending `chrome:` URLs through the restore page fails it |
+| E17 options persist                    | pass                               | none                                                                                                                               |
+| E18 popup view                         | pass                               | none                                                                                                                               |
+| E19 restore from Deleted Items         | pass                               | none                                                                                                                               |
+| E20 pinned tabs included               | pass after fix 2                   | the pinned tab is closed; closing only unpinned tabs fails it                                                                      |
+| E21 sidebar view                       | skipped: Chrome has no sidebar     | —                                                                                                                                  |
+
+**Extension bugs fixed.** Both are in upstream `622bf3d` too, and both are recorded in `TASKS.md`.
+
+1. **Restoring opened nothing on Chrome** (`a962957`). `tabs.create` was always given a `cookieStoreId` key, `undefined` without a container, and Chrome rejects unknown keys even when they're undefined.
+2. **"Stash all" did nothing on Chrome** (`935731c`). `putItemsInFolder()` advanced its insertion index for items it skipped, so the first bookmark went to index 1 of an empty folder, which Chrome rejects. On Firefox, which clamps the index, the same bug put items one place too late when stashing at a chosen position.
+
+**Harness changes for Chrome.** The driver filters `hidden` itself, because Chrome rejects it as a `tabs.query` key, and reports tabs as unmarked where `sessions.getTabValue` doesn't exist. The Chrome adapter collects uncaught errors from pages and service workers over CDP, and stops the worker for `restartBackground()`. `--ref` and `--update-goldens` now work for Chrome.
+
+**Nothing needed architectural change.** Every core scenario the suite covers works on Chrome. The manual Phase 3 checks above remain for what the suite can't reach: the real toolbar popup (including operations cut off when it closes), the context menus, the toolbar button, and a stop with the stash list left open. The adapter stays attached to the service worker, which keeps Chrome from stopping it when idle, so only deliberate restarts are tested.
+
 **Phase 4: Distribution.** The maintainer decides. It needs a Chrome Web Store developer account and listing [R13]. Until then, Chrome builds are for developers only.
 
 **If core functionality is broken.** This RFC aims for parity with Firefox on core functionality in Chrome. If the checks show something core is broken in a way that needs architectural change, it goes to a second RFC rather than growing this one. The likely case is the maintainer's "single biggest barrier": operations started in Chrome's popup are cut off when the popup closes, which needs tab, window and bookmark changes moved out of the UI (see [maintainer-views.md](0001_chrome-mv3-separate-manifest.d/maintainer-views.md)). If everything keeps working, that larger change is postponed.
@@ -484,3 +525,4 @@ Code references are to commit `6df8b7f` on branch `chore/chriscz`:
 
 - 2026-10-13 — draft
 - 2026-10-14 — Phase 3 runs the RFC 0002 suite on Chrome
+- 2026-10-14 — Phase 3 parity results recorded
