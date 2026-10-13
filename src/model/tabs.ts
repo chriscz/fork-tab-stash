@@ -449,6 +449,10 @@ export class Model {
       index: flat_pos.index,
     };
 
+    // Chrome has no containers, and rejects unknown keys even when their value
+    // is undefined.
+    if (create_tab.cookieStoreId === undefined) delete create_tab.cookieStoreId;
+
     if (
       !browser.tabs.hide ||
       !options.url ||
