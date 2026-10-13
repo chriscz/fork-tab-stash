@@ -7,7 +7,25 @@ const fs = require("node:fs");
 const path = require("node:path");
 const {test} = require("node:test");
 const assert = require("node:assert/strict");
-const yaml = require("js-yaml");
+
+// The repo's own node_modules holds an older js-yaml (a transitive dev
+// dependency), and Node prefers it to NODE_PATH, so load the pinned global copy
+// from NODE_PATH explicitly.
+function requireFromNodePath(name: string): any {
+  const paths = (process.env.NODE_PATH ?? "")
+    .split(path.delimiter)
+    .filter(Boolean);
+  let resolved: string;
+  try {
+    resolved = require.resolve(name, {paths});
+  } catch {
+    throw new Error(
+      `${name} isn't installed in NODE_PATH (${paths.join(path.delimiter) || "unset"}); install-test-deps.sh installs it in the dev image`,
+    );
+  }
+  return require(resolved);
+}
+const yaml = requireFromNodePath("js-yaml");
 
 type Browser = "firefox" | "chrome";
 type Phase = "given" | "when" | "then";

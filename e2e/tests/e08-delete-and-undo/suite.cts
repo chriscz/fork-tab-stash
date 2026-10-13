@@ -4,7 +4,7 @@ const {steps} = require("../../harness/runner.cts");
 const reading = async (h: any) =>
   (await h.stash()).find((f: any) => f.title === "Reading");
 
-module.exports = steps(__dirname, {
+steps(__dirname, {
   'A folder named "Reading" in the stash holds Page 1 and Page 2.': async h => {
     await h.seed({stash: [{title: "Reading", pages: [1, 2]}]});
     assert.deepEqual((await reading(h)).urls, h.pageUrls(2));

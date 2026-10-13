@@ -49,6 +49,9 @@ async function launchAdapter({dist}: {dist: string}) {
   // Anything that fails from here on must close the browser, or it keeps node
   // running.
   let context: string;
+  // The URL open() last navigated the test's tab to, so screenshot() can find
+  // that tab among any other extension pages that are open.
+  let openedUrl = "";
   try {
     // webExtension.install is a temporary install, like about:debugging, so the
     // add-on needn't be signed.
@@ -76,9 +79,10 @@ async function launchAdapter({dist}: {dist: string}) {
 
   return {
     async open(page: string) {
+      openedUrl = BASE_URL + page;
       await bidi("browsingContext.navigate", {
         context,
-        url: BASE_URL + page,
+        url: openedUrl,
         wait: "complete",
       });
     },
@@ -97,7 +101,7 @@ async function launchAdapter({dist}: {dist: string}) {
       const url: string = await evaluateIn(
         await chromeContext(),
         `(async () => {
-          const b = gBrowser.browsers.find(b => b.currentURI.spec.startsWith(${JSON.stringify(BASE_URL)}));
+          const b = gBrowser.browsers.find(b => b.currentURI.spec === ${JSON.stringify(openedUrl)});
           const bmp = await b.browsingContext.currentWindowGlobal.drawSnapshot(null, 1, "white");
           const c = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
           c.width = bmp.width;

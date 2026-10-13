@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const {steps} = require("../../harness/runner.cts");
 const {given} = require("../../harness/fixtures.cts");
 
-module.exports = steps(__dirname, {
+steps(__dirname, {
   "Three local pages are open in the window, and the stash is empty.":
     async h => {
       await given.threeOpenPages(h);

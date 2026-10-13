@@ -43,6 +43,8 @@ const clockJs = (iso: string) => `(() => {
   if (globalThis.__e2eClock) return;
   const T = Date.parse(${JSON.stringify(iso)});
   const Real = Date;
+  // Limits: Date() without new throws, and dates made before this runs aren't
+  // instanceof FrozenDate; Tab Stash does neither today.
   class FrozenDate extends Real {
     constructor(...a) { if (a.length === 0) super(T); else super(...a); }
   }
@@ -84,14 +86,24 @@ class Driver {
     return this.adapter.eval(js);
   }
 
-  async waitFor(js: string, what = js, timeout = TIMEOUT_MS): Promise<any> {
+  // Calls the async fn every 100 ms until it returns something truthy, and
+  // returns that.
+  async waitUntil<T>(
+    fn: () => Promise<T>,
+    what: string,
+    timeout = TIMEOUT_MS,
+  ): Promise<T> {
     const end = Date.now() + timeout;
     for (;;) {
-      const value = await this.eval(js);
+      const value = await fn();
       if (value) return value;
       if (Date.now() > end) throw new Error(`Timed out waiting for ${what}`);
       await new Promise(r => setTimeout(r, 100));
     }
+  }
+
+  waitFor(js: string, what = js, timeout = TIMEOUT_MS): Promise<any> {
+    return this.waitUntil(() => this.eval(js), what, timeout);
   }
 
   // A synthetic click, which Tab Stash's @click.prevent.stop handlers accept.

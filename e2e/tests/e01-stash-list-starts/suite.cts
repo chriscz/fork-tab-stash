@@ -1,6 +1,6 @@
 const {steps} = require("../../harness/runner.cts");
 
-module.exports = steps(__dirname, {
+steps(__dirname, {
   // The driver installs the build in a fresh profile before any step runs.
   "Tab Stash is installed in a fresh profile.": async () => {},
 
