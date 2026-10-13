@@ -69,6 +69,10 @@ minimally intrusive and build on what is already there.
 6. **Close out** with `rfc-craft`: move the RFC to `in review`, then `accepted`,
    once the implementation is merged.
 
+**Track bugs outside the current RFC in `TASKS.md`.** When work turns up a bug
+that isn't the current RFC's job, record it there (where, what, effect, how
+it was found, the fix) instead of fixing it in passing.
+
 **Never reference RFCs in code.** No RFC numbers, section references such as
 `§2a`, or links to `rfcs/` in source, comments, tests or build files. RFCs
 live in this fork and upstream readers won't have them. Comments explain why
