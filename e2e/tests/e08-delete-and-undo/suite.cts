@@ -21,7 +21,17 @@ steps(__dirname, {
   },
 
   "The user clicks the undo notification.": async h => {
-    await h.click("aside.notification .contents");
+    // Other notifications (what's new, a stash-root warning) come before the
+    // undo one in src/stash-list/index.vue, and the undo one is always last.
+    // Wait until the last notification is the undo for Page 1, so the click
+    // can't land on another one.
+    await h.waitFor(
+      `[...document.querySelectorAll("aside.notification")].at(-1)?.textContent.includes("Page 1")`,
+      "the undo notification for Page 1",
+    );
+    await h.click(
+      "aside.notification-overlay > aside.notification:last-child .contents",
+    );
   },
 
   '"Reading" holds Page 1 and Page 2 again.': async h => {

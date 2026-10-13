@@ -26,3 +26,7 @@ notes: |
   The clock makes the folder's displayed name ("Saved 1/1/2026, 9:00:00 AM")
   the same on every run; the folder is created after the clock is set, so
   freezing it once the page has loaded is enough here.
+  Screenshot steps wait for the state they show to settle: here, until the
+  window has one visible tab.
+  The golden includes the footer's version ("Tab Stash 3.5"), so a version
+  bump means regenerating it from the baseline.

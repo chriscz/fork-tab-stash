@@ -19,4 +19,4 @@ notes: |
   the folder, not the position.
   Mutation check: in src/stash-list/index.vue, delete the attribute
   @activate="onDeleteNotifActivated" from the recently-deleted <Notification>
-  (line 40); the then step fails.
+  (line 41); the then step fails.

@@ -32,7 +32,14 @@ steps(__dirname, {
 
   "The stash list shows the new folder, expanded, with its three tabs.":
     async h => {
-      await h.showAllFolders(); // the runner takes and compares the screenshot after this
+      await h.showAllFolders();
+      // Stashing goes on after the folder appears (hiding or closing the tabs
+      // changes the open-tabs section), so wait for it to finish before the
+      // runner takes and compares the screenshot.
+      await h.waitFor(
+        `browser.tabs.query({currentWindow: true, hidden: false}).then(t => t.length === 1)`,
+        "one visible tab",
+      );
     },
 
   "The three tabs are hidden and marked as hidden by Tab Stash.": async h => {
@@ -46,14 +53,13 @@ steps(__dirname, {
       h.pageUrls(3),
     );
     // Tab Stash sets the markers one tab at a time after hiding, so wait.
-    const end = Date.now() + 10000;
-    for (;;) {
-      const marked = await Promise.all(
-        hidden.map((t: any) => h.tabMarker(t.id)),
-      );
-      if (marked.every(Boolean) || Date.now() > end) break;
-      await new Promise(r => setTimeout(r, 100));
-    }
+    await h.waitUntil(
+      async () =>
+        (await Promise.all(hidden.map((t: any) => h.tabMarker(t.id)))).every(
+          Boolean,
+        ),
+      "Tab Stash to mark the hidden tabs",
+    );
     for (const t of hidden) assert.equal(await h.tabMarker(t.id), true);
   },
 
