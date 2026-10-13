@@ -21,6 +21,9 @@ import {logErrorsFrom} from "./util/oops.js";
 // The toolbar button's API is `action` under MV3 (Chrome) and `browserAction`
 // under MV2 (Firefox).
 const browserAction = browser.action ?? browser.browserAction;
+// Firefox only exposes browser.action under MV3, and MV3 renames the toolbar
+// button's menu context to "action".
+const MV3 = !!browser.action;
 
 // A Chrome (MV3) service worker only receives the event that woke it if the
 // listener was added synchronously at load.  Add them here; the handlers are
@@ -91,6 +94,10 @@ logErrorsFrom(async () => {
     contexts: Menus.ContextType[],
     def: string[][],
   ) {
+    if (MV3) {
+      contexts = contexts.map(c => (c === "browser_action" ? "action" : c));
+    }
+
     // Only create menus in contexts this browser understands.
     const allowed_ctxs = Object.values(
       (<any>browser.contextMenus).ContextType ||
@@ -109,7 +116,7 @@ logErrorsFrom(async () => {
     );
     contexts = contexts.filter(x => allowed_ctxs.includes(x));
 
-    for (let [id, title] of def) {
+    for (const [i, [id, title]] of def.entries()) {
       if (id) {
         browser.contextMenus.create({contexts, title, id: idprefix + id});
       } else {
@@ -117,6 +124,8 @@ logErrorsFrom(async () => {
           contexts,
           type: "separator",
           enabled: false,
+          // Chrome requires an id when the background is a service worker.
+          id: `${idprefix}sep${i}`,
         });
       }
     }
@@ -130,6 +139,10 @@ logErrorsFrom(async () => {
     "show_sidebar_or_tab",
     $t("showStashedTabsInSidebarMenu"),
   ];
+
+  // Chrome may keep menus across service-worker restarts, and creating an
+  // existing ID fails, so start from a clean slate.
+  if (MV3) await browser.contextMenus.removeAll();
 
   menu(
     "1:",
@@ -164,18 +177,20 @@ logErrorsFrom(async () => {
     ],
   );
 
-  menu(
-    "3:",
-    ["page_action"],
-    [
-      ["show_tab", SHOW_TAB_NAME],
-      ...(browser.sidebarAction ? [SHOW_SIDEBAR_OR_TAB] : []),
-      ["", ""],
-      ["stash_one", $t("stashThisTabMenu")],
-      ["stash_one_newgroup", $t("stashThisTabToNewGroupMenu")],
-      ["copy_one", $t("copyThisTabToStashMenu")],
-    ],
-  );
+  if (browser.pageAction) {
+    menu(
+      "3:",
+      ["page_action"],
+      [
+        ["show_tab", SHOW_TAB_NAME],
+        ...(browser.sidebarAction ? [SHOW_SIDEBAR_OR_TAB] : []),
+        ["", ""],
+        ["stash_one", $t("stashThisTabMenu")],
+        ["stash_one_newgroup", $t("stashThisTabToNewGroupMenu")],
+        ["copy_one", $t("copyThisTabToStashMenu")],
+      ],
+    );
+  }
 
   const commands: {[key: string]: (t?: Tab) => Promise<void>} = {
     // NOTE: Several of these commands open the sidebar.  We have to open the
