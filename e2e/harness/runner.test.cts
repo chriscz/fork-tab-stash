@@ -229,6 +229,23 @@ test("parseSpec rejects the removed clock key", () => {
   );
 });
 
+test("parseSpec reads upstream-bug and rejects an empty or non-string one", () => {
+  const withBug = (value: string) =>
+    parseSpec(
+      SPEC.replace("title: Example", `title: Example\nupstream-bug: ${value}`),
+      "f",
+    );
+  assert.equal(withBug("Some bug").upstreamBug, "Some bug");
+  assert.equal(spec().upstreamBug, undefined);
+  for (const bad of ['""', "5"]) {
+    assert.throws(
+      () => withBug(bad),
+      /f: upstream-bug must be a non-empty string/,
+      bad,
+    );
+  }
+});
+
 test("run calls afterStep once per executed step, not for skipped ones", async () => {
   const pairs = bind(
     spec(),

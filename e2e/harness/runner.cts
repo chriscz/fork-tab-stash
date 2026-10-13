@@ -42,6 +42,9 @@ type Spec = {
   id: string;
   title: string;
   browser?: Browser;
+  // The TASKS.md heading of the upstream bug this fork fixes and the spec
+  // proves fixed.
+  upstreamBug?: string;
   notes: string;
   steps: Step[];
 };
@@ -50,7 +53,16 @@ type Subtest = (name: string, body?: () => Promise<void>) => Promise<boolean>;
 
 const PHASES: Phase[] = ["given", "when", "then"];
 const BROWSERS = ["firefox", "chrome"];
-const SPEC_KEYS = ["id", "title", "browser", "given", "when", "then", "notes"];
+const SPEC_KEYS = [
+  "id",
+  "title",
+  "browser",
+  "upstream-bug",
+  "given",
+  "when",
+  "then",
+  "notes",
+];
 const STEP_KEYS = ["step", "browser", "screenshot"];
 const SCREENSHOT_KEYS = ["name", "mask"];
 
@@ -81,6 +93,13 @@ function parseSpec(text: string, where: string): Spec {
   }
   if (raw.browser !== undefined && !BROWSERS.includes(raw.browser)) {
     fail("browser must be firefox or chrome");
+  }
+  const upstreamBug = raw["upstream-bug"];
+  if (
+    upstreamBug !== undefined &&
+    (typeof upstreamBug !== "string" || !upstreamBug)
+  ) {
+    fail("upstream-bug must be a non-empty string");
   }
   if (typeof raw.notes !== "string") fail("needs notes");
 
@@ -139,6 +158,7 @@ function parseSpec(text: string, where: string): Spec {
     id: raw.id,
     title: raw.title,
     browser: raw.browser,
+    upstreamBug,
     notes: raw.notes,
     steps,
   };
@@ -250,8 +270,15 @@ function steps(dir: string, fns: Record<string, StepFn>): void {
     spec.browser && spec.browser !== browser
       ? `${spec.id} is ${spec.browser}-only`
       : false;
+  // A spec for an upstream bug this fork fixes can't pass on a build from
+  // before the fix, so reference runs report it without failing the run.
+  // node:test marks the subtests todo too, including "no errors were logged".
+  const todo =
+    spec.upstreamBug && process.env.E2E_REF_SHA
+      ? `covers an upstream bug: ${spec.upstreamBug}`
+      : false;
 
-  test(`${spec.id} ${spec.title} (${browser})`, {skip}, async t => {
+  test(`${spec.id} ${spec.title} (${browser})`, {skip, todo}, async t => {
     const pairs = bind(spec, fns, browser);
     const {launch} = require("./driver.cts");
     const h = await launch(browser, {dist});

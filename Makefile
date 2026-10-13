@@ -79,7 +79,10 @@ check-e2e-firefox: build-dbg
 # reused as if it were complete.  The marker is per build target, so a commit's
 # Firefox and Chrome builds share one clone and are cached side by side.  A
 # commit from before Chrome could load the extension still builds, but Chrome
-# rejects it and the run fails at launch.
+# rejects it and the run fails at launch.  The tests get the resolved commit as
+# E2E_REF_SHA, so specs with an upstream-bug key run as todo there.  It isn't
+# E2E_REF because make exports command-line variables to every recipe, and a
+# working-tree run must never treat those specs as todo.
 E2E_BROWSER ?= firefox
 
 check-e2e-ref:
@@ -97,7 +100,8 @@ check-e2e-ref:
 	  git -C "$$dir" checkout --quiet "$$sha" && \
 	  $(MAKE) -C "$$dir" $$build && \
 	  touch "$$dir/.e2e-built-$$build" ) && \
-	TZ=UTC E2E_BROWSER=$(E2E_BROWSER) E2E_DIST="$$dir/$$out" node --test $(E2E_SPECS)
+	TZ=UTC E2E_BROWSER=$(E2E_BROWSER) E2E_DIST="$$dir/$$out" E2E_REF_SHA="$$sha" \
+	  node --test $(E2E_SPECS)
 .PHONY: check-e2e-ref
 
 fix-style: node_modules
