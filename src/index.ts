@@ -292,6 +292,7 @@ logErrorsFrom(async () => {
 
       case "popup":
         model.attempt(commands.show_popup);
+        break;
 
       case "sidebar":
         model.attempt(commands.show_sidebar_or_tab);

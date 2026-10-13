@@ -6,18 +6,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 
 ## Open bugs
 
-### Showing the popup also opens the sidebar
-
-- **Where:** `src/index.ts:293-297`, the `"popup"` case of `show_something()`.
-- **What:** the case has no `break`, so after `commands.show_popup` it falls
-  through to `case "sidebar"` and also runs `commands.show_sidebar_or_tab`.
-- **Effect:** with the toolbar button set to show the popup, using a command
-  that calls `show_something("popup")` (e.g. after stashing) also opens the
-  sidebar on Firefox, or a stash-list tab where there is no sidebar.
-- **Found:** code survey for RFC 0002, 2026-10-13. Confirmed by reading;
-  not yet reproduced in a browser.
-- **Fix:** add `break;` after `model.attempt(commands.show_popup);`.
-- **Status:** open, not reported.
+None.
 
 ## Fixed in this fork
 
@@ -132,3 +121,25 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   unchanged, and each trigger option is disabled on the page.
 - **Fix:** this commit, which removes the dead watchers. E22 checks the
   rule that made them redundant.
+
+### Showing the popup also opens the sidebar
+
+- **Where:** `src/index.ts`, the `"popup"` case of `show_something()`.
+- **What:** the case had no `break`, so after `commands.show_popup` it fell
+  through to `case "sidebar"` and also ran `commands.show_sidebar_or_tab`.
+- **Effect:** wherever `show_something("popup")` runs, Firefox shows the popup
+  and opens the sidebar. Chrome has no sidebar, so by reading it opens a
+  stash-list tab instead. It runs for a menu command when `open_stash_in` is `"popup"`,
+  and for a toolbar click when `browser_action_show` is `"popup"` but the
+  button has no popup set. No release offers `"popup"` for `open_stash_in`
+  (only development builds between `1e578cd` and `9a8922a`, February 2021),
+  but the model still honours a stored value. The button loses its popup
+  because `show_popup` clears it after opening the popup, so once a command
+  has shown it, every toolbar click opens the sidebar too, until an option
+  changes. A click before the background sets the popup at startup should do
+  the same; that was found by reading, not reproduced.
+- **Found:** code survey for RFC 0002, 2026-10-13. Reproduced in Firefox
+  2026-10-14: with both options set to `"popup"`, "Stash This Tab" from a
+  tab's context menu showed the popup and opened the sidebar, and later
+  toolbar clicks did the same.
+- **Fix:** this commit's fix, which adds the missing `break;`. E23 checks it.
