@@ -1,0 +1,22 @@
+id: E08
+title: Delete a bookmark, then undo it
+given:
+  - A folder named "Reading" in the stash holds Page 1 and Page 2.
+when:
+  - The user deletes Page 1 from "Reading" in the stash list.
+  - The user clicks the undo notification.
+then:
+  - '"Reading" holds Page 1 and Page 2 again.'
+notes: |
+  The delete step waits until Page 1 is gone from the bookmarks before it
+  ends, so the undo step really restores a deleted bookmark.
+  The undo notification lasts 8 seconds (RECENT_DELETION_TIMEOUT); the undo
+  step must run well within that.
+  A bookmark row is div.forest-item[title=<title>]; its delete link has class
+  exactly "action remove" (src/stash-list/bookmark.vue).
+  Undo puts the bookmark back in its folder but appends it at the end;
+  upstream promises only "approximately the same place", so the test checks
+  the folder, not the position.
+  Mutation check: in src/stash-list/index.vue, delete the attribute
+  @activate="onDeleteNotifActivated" from the recently-deleted <Notification>
+  (line 40); the then step fails.
