@@ -3,6 +3,44 @@
 `AGENTS.md` still applies in full, including maintainer approval for AI
 contributions and the `Co-Authored-By:` line on every AI-assisted commit and PR.
 
+## Maintainer preferences
+
+These come from @josh-berry's review of the closed Chrome MV3 PR
+([#711](https://github.com/josh-berry/tab-stash/pull/711), July 2026). He
+is "willing to try [AI contributions] as an experiment". Changes should be
+minimally intrusive and build on what is already there.
+
+- **Reuse what exists before adding anything.** The codebase already has
+  Chrome-friendly code, including a Chrome build. Find it and extend it. Don't
+  build a parallel path.
+- **Generate derived files rather than duplicating them.** He wants the Chrome
+  manifest generated from `assets/manifest.json` by a small Node script that
+  reads, mutates and emits the JSON, as `patch-manifest-for-chrome.js` does.
+  Permission changes should carry over to Chrome without anyone remembering
+  to update a second file.
+- **One build system.** Use and tweak the `Makefile`. Don't add separate build
+  scripts or systems.
+- **Use the existing helpers and model logic.**
+  - Open tabs through `restoreTabs()`; it handles empty tabs and picking the
+    target window. If it needs another option, add one.
+  - Reuse existing feature checks and helpers instead of re-checking inline.
+  - Extend existing Chrome-specific branches, such as tab opening in
+    `src/model/tabs.ts`, rather than adding new ones. Keep the
+    `_loading_queue` protection.
+  - Rely on the existing privileged-URL handling rather than blocking URLs.
+  - If something underneath is wrong, fix it at the source instead of working
+    around it in the caller.
+- **No `<any>` casts.** If types are missing, update `webextension-polyfill`'s
+  types instead.
+- **Don't weaken safety for portability.** He is wary of skipping
+  `navigator.storage.persist()`, because saved deleted items could be lost.
+  Any change like this needs evidence that the data stays safe.
+- **Keep diagnostics.** Don't remove warnings, such as unknown-tab events,
+  just because one browser triggers them more often.
+- **Don't duplicate docs.** Check that the README doesn't already say it.
+- **Expect to address review comments.** He closes PRs that go stale without
+  responses to his review.
+
 ## Commits
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/):
