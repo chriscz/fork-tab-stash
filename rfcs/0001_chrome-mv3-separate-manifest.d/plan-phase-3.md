@@ -409,3 +409,15 @@ Expected areas (from the research notes): launch timing out on `last_notified_ve
 - [ ] **Step 1:** Run `bin/e2e test --browser=chrome` three times, `bin/e2e test --browser=firefox` three times and `bin/e2e test --browser=firefox --ref=622bf3d` once. All must pass. Record counts and times.
 - [ ] **Step 2:** In RFC 0001, add `### Phase 3 parity results` after Phase 3: a table with one row per spec (ID, title, Chrome result: pass / skipped (Firefox-only) / deferred, and the Chrome mutation check where there is one), the extension bugs fixed (commit, cause), the architectural gaps handed to a further RFC, and which Phase 3 manual checks remain. Update Success criteria status if met. Commit `docs(rfc-0001): record the Chrome parity results`.
 - [ ] **Step 3:** In RFC 0002, replace text that is now stale: the driver table's Chrome column (it says `page.click`/`page.waitForFunction`; the adapter only needs `goto`, `evaluate`, `screenshot`, `pageerror`, and the worker for restarts), "Firefox only, for now", the `bin/e2e`/Makefile docs (`check-e2e-chrome`, `--ref` for Chrome), the "Running the suite on Chrome" non-goal and "After this RFC" (now done in RFC 0001 Phase 3), and the catalogue's "Expected on Chrome (unverified)" column header. Commit `docs(rfc-0002): describe the Chrome adapter as built`.
+
+---
+
+## Deviations
+
+Where the work departed from this plan:
+
+- **The "Known facts" bullet on `about:` URLs was wrong for Chrome.** Chrome's bookmarks API stores `about:robots` as `chrome://robots/`, and `urlToOpen()` opens `chrome:` URLs directly, so the restore page never appears there. E16 gained a Chrome step that checks the tab opens on exactly `chrome://robots/`.
+- **Triage found two extension bugs, not only suite fixes.** Restoring opened nothing on Chrome (`tabs.create` got an empty `cookieStoreId`), and "Stash all" did nothing (the insertion index advanced past skipped items). Both are fixed with unit tests, and the two fix commits were moved to the bottom of the stack so they can go upstream on their own.
+- **Goldens needed a rendering flag, and were pinned to its commit.** Chrome's screenshots varied between runs until it was launched with `--disable-partial-raster`, which got its own commit. The goldens were pinned to that commit rather than to the stack's top after Task 5.
+- **E05's Chrome step was strengthened.** It also checks that the restored tab is active, so it can fail on its own instead of repeating the shared "Exactly one tab" step.
+- **The suite line in `check-e2e-chrome` lands with the goldens.** Task 2's commit adds only the adapter, so `make check-e2e-chrome` stays green at every commit; it runs the spec suites from the goldens commit on.
