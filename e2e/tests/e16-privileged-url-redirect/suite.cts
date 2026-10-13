@@ -30,4 +30,17 @@ steps(__dirname, {
     );
     assert.deepEqual(await h.tabs({url: "about:robots"}), []);
   },
+
+  "A tab opens on chrome://robots/, the URL Chrome stored for about:robots.":
+    async h => {
+      await h.waitUntil(
+        async () => (await h.tabs({url: "chrome://robots/"})).length === 1,
+        "one tab on chrome://robots/",
+      );
+      const restore = await h.eval(`browser.runtime.getURL("restore.html")`);
+      assert.deepEqual(
+        (await h.tabs()).filter((t: any) => t.url.startsWith(restore)),
+        [],
+      );
+    },
 });

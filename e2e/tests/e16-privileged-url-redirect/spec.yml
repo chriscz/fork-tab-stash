@@ -5,13 +5,25 @@ given:
 when:
   - The user clicks the bookmark "Robots" in the stash list.
 then:
-  - A tab opens on Tab Stash's restore page for about:robots.
+  - step: A tab opens on Tab Stash's restore page for about:robots.
+    browser: firefox
+  - step: A tab opens on chrome://robots/, the URL Chrome stored for about:robots.
+    browser: chrome
 notes: |
   Extensions can't open most about: URLs, so urlToOpen (src/util/index.ts)
-  sends them to restore.html?url=<encoded URL>. The then step compares the
+  sends them to restore.html?url=<encoded URL>. The Firefox step compares the
   whole tab URL, built from browser.runtime.getURL("restore.html"), so it is
   this extension's restore page, and checks no tab tried about:robots
   itself.
   Mutation check: in src/util/index.ts:126, replace
   `return redirUrl(urlstr);` with `return urlstr as OpenableURL;`, so
-  about: URLs are opened as they are; the then step fails.
+  about: URLs are opened as they are; the Firefox step fails.
+  Chrome's bookmarks API stores about:robots as chrome://robots/, and
+  urlToOpen opens chrome: URLs directly on Chrome, which allows extensions
+  to open them, so the tab opens on chrome://robots/ and never on the
+  restore page. The tab holds exactly the URL the bookmark holds; what
+  Chrome shows there is up to Chrome. The Chrome step checks that one tab
+  has that exact URL and none is on the restore page.
+  Chrome mutation check: in src/util/index.ts:135, delete
+  `if (!browser.runtime.getBrowserInfo) break;`, so chrome: URLs go to the
+  restore page on Chrome too; the Chrome step fails.
