@@ -64,8 +64,8 @@ steps(__dirname, {
   },
 
   "The three tabs are closed.": async h => {
-    await h.waitFor(
-      `browser.tabs.query({currentWindow: true, url: ${JSON.stringify(h.pageUrls(3))}}).then(t => t.length === 0)`,
+    await h.waitUntil(
+      async () => (await h.tabs({url: h.pageUrls(3)})).length === 0,
       "the page tabs to close",
     );
     assert.equal((await h.tabs({url: h.pageUrls(3)})).length, 0);

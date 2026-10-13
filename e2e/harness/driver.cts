@@ -223,8 +223,30 @@ class Driver {
     );
   }
 
-  // The stash's folders, top to bottom, as {title, urls}.
-  stash(): Promise<Array<{title: string; urls: string[]}>> {
+  // The stash's folders, top to bottom, as {title, urls}.  Reading can throw
+  // ("node is null") while a folder is being created or changed, so retry for
+  // a short time before giving up.
+  async stash(): Promise<Array<{title: string; urls: string[]}>> {
+    let lastError: unknown;
+    try {
+      return await this.waitUntil(
+        async () => {
+          try {
+            return [await this.readStash()];
+          } catch (e) {
+            lastError = e;
+            return undefined;
+          }
+        },
+        "the stash to be readable",
+        5000,
+      ).then(r => r[0]);
+    } catch (e) {
+      throw new Error(`Could not read the stash: ${lastError ?? e}`);
+    }
+  }
+
+  private readStash(): Promise<Array<{title: string; urls: string[]}>> {
     return this.eval(`(async () => {
       const [root] = (await browser.bookmarks.search({title: ${JSON.stringify(STASH_ROOT)}}))
         .filter(b => !b.url);
@@ -237,15 +259,22 @@ class Driver {
     })()`);
   }
 
-  // Tabs in the page's window, in tab order.
+  // Tabs in the page's window, in tab order.  `url` (a string or an array) is
+  // matched exactly here rather than passed to browser.tabs.query, because
+  // that treats it as a match pattern, and match patterns can't carry a port,
+  // so the local test pages would match nothing.
   tabs(
-    query: object = {},
+    query: {url?: string | string[]; [key: string]: unknown} = {},
   ): Promise<
     Array<{id: number; url: string; hidden: boolean; active: boolean}>
   > {
+    const {url, ...rest} = query;
+    const urls = url === undefined ? null : [url].flat();
     return this
-      .eval(`browser.tabs.query(${JSON.stringify({...query, currentWindow: true})})
-      .then(ts => ts.map(t => ({id: t.id, url: t.url, hidden: !!t.hidden, active: t.active})))`);
+      .eval(`browser.tabs.query(${JSON.stringify({...rest, currentWindow: true})})
+      .then(ts => ts
+        .filter(t => ${JSON.stringify(urls)} === null || ${JSON.stringify(urls)}.includes(t.url))
+        .map(t => ({id: t.id, url: t.url, hidden: !!t.hidden, active: t.active})))`);
   }
 
   // Whether Tab Stash marked this tab as hidden by itself (Firefox only: Chrome

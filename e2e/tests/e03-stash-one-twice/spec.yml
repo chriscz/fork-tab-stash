@@ -17,8 +17,6 @@ notes: |
   Open-tab rows are div.forest-item[title=<tab title>] inside
   ul.forest.one-column; their stash link has class exactly "action stash one".
   Each when step waits for its bookmark before ending.
-  Firefox's tabs.query url option matches nothing for URLs with a port, so the
-  suite filters tabs by URL itself.
-  Mutation check: in src/model/index.ts, make the default-folder reuse check
-  (the new_folder_timeout_min comparison) always false; the "same, single
-  stash folder" step fails.
+  Mutation check: in src/model/index.ts:420, replace the condition
+  `topmost.dateAdded! < age_cutoff` with `true` (`if (true)`), so the default
+  folder is never reused; the "same, single stash folder" step fails.

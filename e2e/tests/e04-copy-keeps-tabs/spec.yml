@@ -15,7 +15,6 @@ notes: |
   full contents.
   tabMarker uses sessions.getTabValue, which Chrome lacks; the last step
   treats a failing lookup as "unmarked" so it stays valid on Chrome.
-  Firefox's tabs.query url option matches nothing for URLs with a port, so the
-  suite filters tabs by URL itself.
-  Mutation check: in src/stash-list/window.vue's stash handler, ignore the
-  Alt key so it never copies; the "still visible" step fails.
+  Mutation check: in src/stash-list/window.vue:471, change
+  `copyIf(ev.altKey, to_stash)` to `to_stash`, so Alt-click moves instead of
+  copying; the "still visible" step fails.

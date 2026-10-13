@@ -46,13 +46,12 @@ steps(__dirname, {
   },
 
   "Page 1 and Page 2 are closed, and Page 3 is still open.": async h => {
-    // Filter by URL here: tabs.query's url option takes match patterns, and
-    // Firefox matches none for a URL with a port.
-    const urls = async () => (await h.tabs()).map((t: any) => t.url);
-    await h.waitUntil(async () => {
-      const open = await urls();
-      return !open.includes(h.pageUrl(1)) && !open.includes(h.pageUrl(2));
-    }, "Page 1 and Page 2 to close");
-    assert.ok((await urls()).includes(h.pageUrl(3)));
+    const isOpen = async (n: number) =>
+      (await h.tabs({url: h.pageUrl(n)})).length > 0;
+    await h.waitUntil(
+      async () => !(await isOpen(1)) && !(await isOpen(2)),
+      "Page 1 and Page 2 to close",
+    );
+    assert.ok(await isOpen(3));
   },
 });
