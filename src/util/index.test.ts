@@ -640,4 +640,56 @@ describe("util", function () {
       expect(ctm.cancelled).to.equal(true);
     });
   });
+
+  describe("deferredListener()", () => {
+    function fakeEvent<A extends any[]>() {
+      const listeners: ((...a: A) => void)[] = [];
+      return {
+        addListener(l: (...a: A) => void) {
+          listeners.push(l);
+        },
+        send(...a: A) {
+          for (const l of listeners) l(...a);
+        },
+      };
+    }
+
+    it("replays events sent before a handler was attached, in order", () => {
+      const ev = fakeEvent<[number]>();
+      const d = M.deferredListener(ev);
+      ev.send(1);
+      ev.send(2);
+
+      const seen: number[] = [];
+      d.handle(n => seen.push(n));
+      expect(seen).to.deep.equal([1, 2]);
+    });
+
+    it("delivers later events synchronously, after replaying early ones once", () => {
+      const ev = fakeEvent<[number]>();
+      const d = M.deferredListener(ev);
+      ev.send(1);
+      const seen: number[] = [];
+      d.handle(n => seen.push(n));
+
+      ev.send(2);
+      // No await in between: Firefox only allows opening the sidebar from
+      // a handler that runs in the same turn as the user's click.
+      expect(seen).to.deep.equal([1, 2]);
+    });
+
+    it("keeps replaying after a handler throws on a queued event", () => {
+      const ev = fakeEvent<[number]>();
+      const d = M.deferredListener(ev);
+      ev.send(1);
+      ev.send(2);
+
+      const seen: number[] = [];
+      d.handle(n => {
+        if (n === 1) throw new Error("expected test error");
+        seen.push(n);
+      });
+      expect(seen).to.deep.equal([2]);
+    });
+  });
 });

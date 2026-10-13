@@ -10,12 +10,30 @@ import service_model from "./service-model.js";
 import {
   asyncEvent,
   backingOff,
+  deferredListener,
   filterMap,
   nonReentrant,
   urlToOpen,
   $t,
 } from "./util/index.js";
 import {logErrorsFrom} from "./util/oops.js";
+
+// The toolbar button's API is `action` under MV3 (Chrome) and `browserAction`
+// under MV2 (Firefox).
+const browserAction = browser.action ?? browser.browserAction;
+
+// A Chrome (MV3) service worker only receives the event that woke it if the
+// listener was added synchronously at load.  Add them here; the handlers are
+// attached below once the model has loaded.
+const browserWakeEvents = {
+  menuClicked: deferredListener(browser.contextMenus.onClicked),
+  browserActionClicked: browserAction
+    ? deferredListener(browserAction.onClicked)
+    : undefined,
+  pageActionClicked: browser.pageAction
+    ? deferredListener(browser.pageAction.onClicked)
+    : undefined,
+};
 
 logErrorsFrom(async () => {
   // BEGIN FILE-WIDE ASYNC BLOCK
@@ -175,12 +193,12 @@ logErrorsFrom(async () => {
       // rather than running the browserAction.onClicked callback (which might
       // do other things besides setting the popup).
       try {
-        await browser.browserAction.setPopup({
+        await browserAction.setPopup({
           popup: "stash-list.html?view=popup",
         });
-        await browser.browserAction.openPopup();
+        await browserAction.openPopup();
       } finally {
-        await browser.browserAction.setPopup({popup: ""});
+        await browserAction.setPopup({popup: ""});
       }
     },
 
@@ -311,7 +329,7 @@ logErrorsFrom(async () => {
   // Top-level/user facing event bindings, which mostly just call commands.
   //
 
-  browser.contextMenus.onClicked.addListener((info, tab) => {
+  browserWakeEvents.menuClicked.handle((info, tab) => {
     // #cast We only ever create menu items with string IDs
     const cmd = (<string>info.menuItemId).replace(/^[^:]*:/, "");
     console.assert(!!commands[cmd]);
@@ -319,7 +337,7 @@ logErrorsFrom(async () => {
     commands[cmd](t).catch(console.log);
   });
 
-  if (browser.browserAction) {
+  if (browserWakeEvents.browserActionClicked) {
     // In order for show_something('popup') to work, we must preconfigure the
     // browser to know which popup to show.  This cannot be done at the time of
     // show_something() because doing so requires an async call, and Firefox
@@ -332,20 +350,20 @@ logErrorsFrom(async () => {
           // will no longer run (the popup will be shown instead).  This
           // unfortunately means that we can't stash and show the popup at
           // the same time.  Sigh.
-          await browser.browserAction.setPopup({
+          await browserAction.setPopup({
             popup: "stash-list.html?view=popup",
           });
         } else {
           // If the user turns off the popup, we must clear the popup in
           // the browser if we expect anything else to work.
-          await browser.browserAction.setPopup({popup: ""});
+          await browserAction.setPopup({popup: ""});
         }
       });
     }
     setupPopup();
     model.options.sync.onChanged.addListener(setupPopup);
 
-    browser.browserAction.onClicked.addListener(
+    browserWakeEvents.browserActionClicked.handle(
       asyncEvent(async tab => {
         const opts = model.options.sync.state;
         // Special case so the user doesn't think Tab Stash is broken
@@ -362,8 +380,8 @@ logErrorsFrom(async () => {
     );
   }
 
-  if (browser.pageAction) {
-    browser.pageAction.onClicked.addListener(
+  if (browserWakeEvents.pageActionClicked) {
+    browserWakeEvents.pageActionClicked.handle(
       asyncEvent(async tab => {
         if (!model.options.sync.state.open_stash_in) {
           // User hasn't decided what this button should do yet
@@ -410,8 +428,8 @@ logErrorsFrom(async () => {
         }
       }
 
-      if (browser.browserAction) {
-        await browser.browserAction.setTitle({
+      if (browserAction) {
+        await browserAction.setTitle({
           title: getTitle(opts.state.browser_action_stash),
         });
       }

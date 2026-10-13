@@ -172,6 +172,38 @@ export function asyncEvent<
   } as T;
 }
 
+/** Adds a listener to `event` right away, but delivers events to a handler
+ * attached later with `handle()`.  Events that arrive before then are queued
+ * and replayed in order; after that, events reach the handler synchronously.
+ *
+ * A Chrome (MV3) service worker only receives the event that woke it if the
+ * listener was added during the worker's first turn. */
+export function deferredListener<L extends (...args: any[]) => any>(event: {
+  addListener(l: L): void;
+}): {handle(l: L): void} {
+  let handler: L | undefined;
+  const queued: Parameters<L>[] = [];
+
+  event.addListener(((...args: Parameters<L>) => {
+    if (handler) handler(...args);
+    else queued.push(args);
+  }) as L);
+
+  return {
+    handle(l: L) {
+      handler = l;
+      for (const args of queued.splice(0)) {
+        // One bad queued event shouldn't drop the rest or abort the caller.
+        try {
+          l(...args);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    },
+  };
+}
+
 // Waits for a bunch of named promises.  The advantage to using this is it
 // allows you to fire off a bunch of stuff in parallel and then wait for it all
 // at once, which should in theory minimize overall latency.
