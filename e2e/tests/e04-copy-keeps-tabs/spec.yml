@@ -16,3 +16,6 @@ notes: |
   Mutation check: in src/stash-list/window.vue:471, change
   `copyIf(ev.altKey, to_stash)` to `to_stash`, so Alt-click moves instead of
   copying; the "still visible" step fails.
+  On Chrome, tabMarker is always false (Chrome has no session values to
+  mark tabs with), so only the "still visible" part of the last step can
+  fail there.

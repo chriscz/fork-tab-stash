@@ -33,3 +33,8 @@ notes: |
   window has one visible tab.
   The golden includes the footer's version ("Tab Stash 3.5"), so a version
   bump means regenerating it from the baseline.
+  Chrome mutation check: in src/model/tabs.ts:664, in hide()'s fallback for
+  browsers that can't hide tabs, replace `await this.remove(tabs);` with
+  `// await this.remove(tabs);`, so stashed tabs stay open; "The three tabs
+  are closed" fails. So do the screenshot step's wait and "still has one
+  visible tab": a tab left open is visible on Chrome.

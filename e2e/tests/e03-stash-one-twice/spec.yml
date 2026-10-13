@@ -20,3 +20,6 @@ notes: |
   Mutation check: in src/model/index.ts:420, replace the condition
   `topmost.dateAdded! < age_cutoff` with `true` (`if (true)`), so the default
   folder is never reused; the "same, single stash folder" step fails.
+  Chrome mutation check: in src/model/tabs.ts:664, replace
+  `await this.remove(tabs);` with `// await this.remove(tabs);`, so stashed
+  tabs stay open; "Page 1 and Page 2 are closed" fails.

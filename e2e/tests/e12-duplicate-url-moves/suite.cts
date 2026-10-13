@@ -15,6 +15,9 @@ steps(__dirname, {
   'The user clicks "Stash all open tabs here" on "Reading".': async h => {
     await h.showAllFolders();
     await h.clickInFolder("Reading", 'a[class="action stash here"]');
+  },
+
+  '"Reading" still holds exactly one bookmark for Page 1.': async h => {
     // Tab Stash puts the bookmarks in place before it hides or closes the
     // tabs, so once Page 1 has left the window the folder is final.
     await h.waitUntil(
@@ -22,9 +25,6 @@ steps(__dirname, {
         (await h.tabs({url: h.pageUrl(1), hidden: false})).length === 0,
       "Page 1 to leave the window",
     );
-  },
-
-  '"Reading" still holds exactly one bookmark for Page 1.': async h => {
     const stash = await h.stash();
     assert.deepEqual(stash, [{title: "Reading", urls: [h.pageUrl(1)]}]);
     // And no copy of it anywhere else in the bookmarks.

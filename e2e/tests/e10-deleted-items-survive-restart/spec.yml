@@ -22,3 +22,7 @@ notes: |
   its databases, so this wipes Deleted Items only if the restart happened:
   "Deleted Items still lists" fails, while E09, which has no restart,
   still passes.
+  Chrome mutation check: the same deleteDatabase edit fails "Deleted Items
+  still lists" on Chrome too, while E09's steps still pass there (apart from
+  its screenshot until it has a Chrome golden), so the service worker
+  really restarts.

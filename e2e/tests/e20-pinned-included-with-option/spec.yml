@@ -23,3 +23,7 @@ notes: |
   Mutation check: in src/stash-list/window.vue:465, replace
   `!the.model.options.sync.state.stash_include_pinned` with `true`, so
   pinned tabs are always left out; the "Pages 1 to 3" step fails.
+  Chrome mutation check: in src/model/tabs.ts:664, replace
+  `await this.remove(tabs);` with
+  `await this.remove(tabs.filter(t => !t.pinned));`, so pinned tabs are
+  stashed but stay open; only "Page 1 is closed" fails.

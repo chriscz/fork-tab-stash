@@ -26,3 +26,9 @@ notes: |
   `(t.hidden || t.position?.parent === to_parent)` with
   `!t.hidden && t.position?.parent === to_parent`, so moveLeaf never reuses
   hidden tabs; the "original tab is visible again" step fails.
+  On Chrome, stashing closed the tabs, so restoring opens a new one.
+  Chrome mutation check: in src/stash-list/bookmark.vue:216, replace
+  `restoreTabs([this.bookmark], {background: bg})` with
+  `restoreTabs([this.bookmark, this.bookmark], {background: bg})`, so a
+  click opens Page 1 twice; "A new tab opens with Page 1" fails, and so does
+  "Exactly one tab shows Page 1", which also counts Page 1's tabs.
