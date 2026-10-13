@@ -12,10 +12,9 @@ const given = {
     await h.openPages(3);
     h.vars.pageTabs = await h.tabs({url: h.pageUrls(3)});
     await h.click('nav.forest-toolbar > a[class="action stash"]');
-    const urls = JSON.stringify(h.pageUrls(3));
-    await h.waitFor(
-      `browser.tabs.query({currentWindow: true, hidden: false})
-        .then(ts => !ts.some(t => ${urls}.includes(t.url)))`,
+    await h.waitUntil(
+      async () =>
+        (await h.tabs({url: h.pageUrls(3), hidden: false})).length === 0,
       "the three pages to leave the window",
     );
     await h.waitUntil(

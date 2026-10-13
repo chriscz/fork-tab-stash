@@ -36,8 +36,8 @@ steps(__dirname, {
       // Stashing goes on after the folder appears (hiding or closing the tabs
       // changes the open-tabs section), so wait for it to finish before the
       // runner takes and compares the screenshot.
-      await h.waitFor(
-        `browser.tabs.query({currentWindow: true, hidden: false}).then(t => t.length === 1)`,
+      await h.waitUntil(
+        async () => (await h.tabs({hidden: false})).length === 1,
         "one visible tab",
       );
     },

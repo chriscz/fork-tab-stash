@@ -284,27 +284,35 @@ class Driver {
   // Tabs in the page's window, in tab order.  `url` (a string or an array) is
   // matched exactly here rather than passed to browser.tabs.query, because
   // that treats it as a match pattern, and match patterns can't carry a port,
-  // so the local test pages would match nothing.
+  // so the local test pages would match nothing.  `hidden` is matched here too:
+  // Chrome rejects it as a query key, and its tabs are never hidden.
   tabs(
-    query: {url?: string | string[]; [key: string]: unknown} = {},
+    query: {
+      url?: string | string[];
+      hidden?: boolean;
+      [key: string]: unknown;
+    } = {},
   ): Promise<
     Array<{id: number; url: string; hidden: boolean; active: boolean}>
   > {
-    const {url, ...rest} = query;
-    const urls = url === undefined ? null : [url].flat();
+    const {url, hidden, ...rest} = query;
+    const urls = JSON.stringify(url === undefined ? null : [url].flat());
+    const wantHidden = JSON.stringify(hidden ?? null);
     return this
       .eval(`browser.tabs.query(${JSON.stringify({...rest, currentWindow: true})})
       .then(ts => ts
-        .filter(t => ${JSON.stringify(urls)} === null || ${JSON.stringify(urls)}.includes(t.url))
+        .filter(t => ${urls} === null || ${urls}.includes(t.url))
+        .filter(t => ${wantHidden} === null || !!t.hidden === ${wantHidden})
         .map(t => ({id: t.id, url: t.url, hidden: !!t.hidden, active: t.active})))`);
   }
 
-  // Whether Tab Stash marked this tab as hidden by itself (Firefox only: Chrome
-  // has no session values).
+  // Whether Tab Stash marked this tab as hidden by itself.  Browsers without
+  // session values (Chrome) can't mark tabs, so the answer there is false.
   tabMarker(tabId: number): Promise<boolean> {
-    return this
-      .eval(`browser.sessions.getTabValue(${tabId}, ${JSON.stringify(HIDDEN_MARKER)})
-      .then(v => v === true)`);
+    return this.eval(`browser.sessions?.getTabValue
+      ? browser.sessions.getTabValue(${tabId}, ${JSON.stringify(HIDDEN_MARKER)})
+          .then(v => v === true)
+      : false`);
   }
 
   // Sets options and stash folders, then reloads the current page so it starts

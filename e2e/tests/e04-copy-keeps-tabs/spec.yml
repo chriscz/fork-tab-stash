@@ -13,8 +13,6 @@ notes: |
   the isURLStashable check), which is a bug, so the folder step looks only at
   the three local pages and their order, and does not assert the folder's
   full contents.
-  tabMarker uses sessions.getTabValue, which Chrome lacks; the last step
-  treats a failing lookup as "unmarked" so it stays valid on Chrome.
   Mutation check: in src/stash-list/window.vue:471, change
   `copyIf(ev.altKey, to_stash)` to `to_stash`, so Alt-click moves instead of
   copying; the "still visible" step fails.

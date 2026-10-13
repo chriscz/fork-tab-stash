@@ -42,8 +42,7 @@ steps(__dirname, {
       assert.equal(tabs.length, 3);
       for (const t of tabs) {
         assert.equal(t.hidden, false);
-        // Chrome has no session values, so tabMarker throws there: unmarked.
-        assert.equal(await h.tabMarker(t.id).catch(() => false), false);
+        assert.equal(await h.tabMarker(t.id), false);
       }
     },
 });
