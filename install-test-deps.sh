@@ -14,6 +14,7 @@ set -ex
 PUPPETEER_VERSION=25.13.0
 CHROME_VERSION=155.0.8059.39
 FIREFOX_VERSION=stable_157.0.1
+JS_YAML_VERSION=5.4.3
 
 # Respect PUPPETEER_CACHE_DIR so the browser can live somewhere every user can
 # read (the dev image runs as the host user's UID); otherwise use Puppeteer's
@@ -21,7 +22,8 @@ FIREFOX_VERSION=stable_157.0.1
 CACHE_DIR="${PUPPETEER_CACHE_DIR:-$HOME/.cache/puppeteer}"
 
 # Skip the postinstall download: under sudo it would land in root's cache.
-sudo env PUPPETEER_SKIP_DOWNLOAD=1 npm install -g "puppeteer@$PUPPETEER_VERSION"
+sudo env PUPPETEER_SKIP_DOWNLOAD=1 npm install -g \
+    "puppeteer@$PUPPETEER_VERSION" "js-yaml@$JS_YAML_VERSION"
 
 # --install-deps runs apt-get for Chrome's system libraries, so it needs root
 # and fresh package lists.
