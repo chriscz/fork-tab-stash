@@ -71,21 +71,6 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   new bookmarks.
 - **Status:** open, not reported.
 
-### A deleted-items unit test fails about once in a thousand runs
-
-- **Where:** `src/model/deleted-items.test.ts:337-348`, "only loads new items
-  that match the applied filter".
-- **What:** the test fills deleted items with `makeFakeData_testonly(50)`,
-  whose titles are three random words out of 22, then expects at least one
-  top-level title to contain "cat". With no title containing it (about
-  (21/22)^150, roughly 0.1%), `expected +0 to be above +0` fails.
-- **Effect:** `make` fails now and then for no reason; a rerun passes.
-- **Found:** `bin/dev run make` while adding E7, E9 and E19, 2026-10-13. One
-  failure, then 625 passing on the rerun.
-- **Fix:** add one item whose title contains "cat" before checking, or make
-  the fake data's random choice seedable.
-- **Status:** open, not reported.
-
 ## Fixed in this fork
 
 ### Chrome rejects dotted plural message keys
@@ -123,3 +108,20 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   late per skipped tab. Upstream `622bf3d` has the same code.
 - **Found:** the Chrome end-to-end run of E02, E05, E15 and E20, 2026-10-14.
 - **Fix:** `935731c`, which advances the index only when an item is placed.
+
+### A deleted-items unit test fails about once in a thousand runs
+
+- **Where:** `src/model/deleted-items.test.ts`, "only loads new items that
+  match the applied filter" and "loads only items which match the applied
+  filter".
+- **What:** each test fills deleted items with `makeFakeData_testonly(50)`,
+  whose titles are three random words out of 22, then expects at least one
+  top-level title to contain "cat". With no title containing it (about
+  (21/22)^150, roughly 0.1%), `expected +0 to be above +0` fails.
+- **Effect:** `make` fails now and then for no reason; a rerun passes.
+  Upstream `622bf3d` has the same tests.
+- **Found:** `bin/dev run make` while adding E7, E9 and E19, 2026-10-13. One
+  failure, then 625 passing on the rerun. The second test turned up while
+  proving the fix, with "cat" taken out of the word list.
+- **Fix:** this commit's fix, which adds one item titled "Black cat" before the
+  random data in both tests.
