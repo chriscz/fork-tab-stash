@@ -55,7 +55,8 @@ welcome). Here's what you need to do:
 4. You'll get the following artifacts:
    - `dist`: The unpacked Firefox extension
 
-   - `dist-chrome`: A highly-experimental port to Chrome (also unpacked)
+   - `dist-chrome`: A highly-experimental Manifest V3 port to Chrome 148 or
+     newer (also unpacked). `make pkg-chrome` packs a release build of it.
 
    - (release builds only) `releases/tab-stash-X.XX-hhhhhhh.zip`: The packed
      Firefox extension (this is what gets uploaded to AMO)

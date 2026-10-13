@@ -18,6 +18,7 @@ RELEASE_DIR = releases
 SRCPKG_DIR = $(PACKAGE)-src-$(FULL_VERSION)
 SRC_PKG = $(RELEASE_DIR)/$(SRCPKG_DIR).tar.gz
 DIST_PKG = $(RELEASE_DIR)/$(PACKAGE)-$(FULL_VERSION).zip
+CHROME_PKG = $(RELEASE_DIR)/$(PACKAGE)-chrome-$(FULL_VERSION).zip
 
 # Primary (user-facing) targets.
 
@@ -106,6 +107,11 @@ pkg-webext: clean-working-tree build-rel
 	cd dist && zip -9rvo ../$(DIST_PKG) `find . -type f`
 .PHONY: pkg-webext
 
+pkg-chrome: clean-working-tree build-chrome-rel
+	mkdir -p $(RELEASE_DIR)
+	cd dist-chrome && zip -9rvo ../$(CHROME_PKG) `find . -type f`
+.PHONY: pkg-chrome
+
 pkg-source: clean-working-tree
 	mkdir -p $(RELEASE_DIR)
 	rm -rf $(RELEASE_DIR)/$(SRCPKG_DIR) $(SRC_PKG)
@@ -141,6 +147,14 @@ build-chrome-dbg: build-dbg
 		exit 1 \
 	)
 .PHONY: build-chrome-dbg
+
+build-chrome-rel: build-rel
+	rsync -aHvx --delete --force dist/ dist-chrome/
+	node ./patch-manifest-for-chrome.js >dist-chrome/manifest.json || (\
+		rm -f dist-chrome/manifest.json; \
+		exit 1 \
+	)
+.PHONY: build-chrome-rel
 
 build-dbg: node_modules icons dist/tab-stash.css
 	NODE_ENV=development ./node_modules/.bin/vite build -c vite.config.html.ts -m development
@@ -222,7 +236,7 @@ site:
 
 distclean: clean
 	rm -rf node_modules docs/vendor \
-		$(RELEASE_DIR)/$(SRCPKG_DIR) $(SRC_PKG) $(DIST_PKG) \
+		$(RELEASE_DIR)/$(SRCPKG_DIR) $(SRC_PKG) $(DIST_PKG) $(CHROME_PKG) \
 		releases/*-dirty* releases/*-dev*
 .PHONY: distclean
 
