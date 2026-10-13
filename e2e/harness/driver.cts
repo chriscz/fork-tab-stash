@@ -419,14 +419,22 @@ class Driver {
   // to finish starting up; reopening sooner would cut its startup short.
   async restartBackground(): Promise<void> {
     await this.adapter.restartBackground();
-    await this.waitUntil(async () => {
-      try {
-        await this.open(this.page, 5000);
-        return true;
-      } catch {
-        return false;
-      }
-    }, "the extension to come back after restarting its background");
+    let lastError: unknown;
+    try {
+      await this.waitUntil(async () => {
+        try {
+          await this.open(this.page, 5000);
+          return true;
+        } catch (e) {
+          lastError = e;
+          return false;
+        }
+      }, "the extension to come back after restarting its background");
+    } catch (e) {
+      throw new Error(
+        `Could not reopen ${this.page} after restarting the background: ${lastError ?? e}`,
+      );
+    }
   }
 
   // Errors from the browser's console plus those Tab Stash caught itself.
