@@ -2,7 +2,7 @@
 
 set -ex
 
-NODE_VERSION=20
+NODE_VERSION=22
 
 deps_apt() {
     # Check for old Ubuntus
