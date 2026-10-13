@@ -28,7 +28,7 @@
   - passes `bin/dev run make`, which type-checks, builds Firefox and Chrome, runs the tests and checks Prettier and i18n;
   - ends with the line `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, as `AGENTS.md` requires.
 - **Commit order.** Commits form a Gerrit-style stack in task order, and each must stand on its own.
-- **Comments.** New code comments that implement an RFC decision end with a tag like `[RFC 0001 §2a]`.
+- **Comments.** New code comments explain why. They don't reference the RFC: upstream readers won't have it, and the commit scope carries the link.
 - **Deviations.** If a task cannot follow this plan without contradicting the RFC, the implementer stops and reports. The controller updates the RFC in its own `docs(rfc-0001): ...` commit before the code commit.
 - **Prettier.** If `make` fails only on Prettier, run `bin/dev run make fix-style` and re-run `bin/dev run make`.
 
@@ -100,6 +100,7 @@ it("serves requests made before the database finishes opening", async () => {
     }),
   );
   await written;
+  await events.next(svc.onSet);
 
   expect(await svc.get(["early"])).to.deep.equal([
     {key: "early", value: "bird"},
@@ -122,7 +123,7 @@ In `src/datastore/kvs/service.ts`, replace the whole `static open(...)` method (
     store_name: string,
   ): Service<K, V> {
     // Opening is lazy so the caller can register the service (and accept
-    // connections) before the database is ready.  [RFC 0001 §2c]
+    // connections) before the database is ready.
     return new Service(openPersistentDB(db_name, store_name), store_name);
   }
 ```
@@ -138,7 +139,7 @@ async function openPersistentDB(
   // Magical incantation to make sure the browser doesn't spontaneously
   // delete our store.  persist() doesn't exist in service workers (Chrome
   // MV3), where the unlimitedStorage permission prevents eviction instead.
-  // [RFC 0001 §2d]
+  //
   if (
     "persist" in navigator.storage &&
     !(await navigator.storage.persisted())
@@ -191,7 +192,7 @@ In `src/service-model.ts`, replace everything from `const kvs = await resolveNam
 ```ts
 // Register the store services before the first await, so a page that
 // connects to a freshly-started (Chrome MV3) service worker finds them
-// listening.  [RFC 0001 §2c]
+// listening.
 const kvs = {
   deleted_items: KVSService.open<string, M.DeletedItems.SourceValue>(
     "deleted_items",
@@ -267,7 +268,6 @@ describe("deferredListener()", () => {
   function fakeEvent<A extends any[]>() {
     const listeners: ((...a: A) => void)[] = [];
     return {
-      listeners,
       addListener(l: (...a: A) => void) {
         listeners.push(l);
       },
@@ -276,12 +276,6 @@ describe("deferredListener()", () => {
       },
     };
   }
-
-  it("adds its listener to the event immediately", () => {
-    const ev = fakeEvent<[number]>();
-    M.deferredListener(ev);
-    expect(ev.listeners.length).to.equal(1);
-  });
 
   it("replays events sent before a handler was attached, in order", () => {
     const ev = fakeEvent<[number]>();
@@ -294,25 +288,16 @@ describe("deferredListener()", () => {
     expect(seen).to.deep.equal([1, 2]);
   });
 
-  it("delivers events synchronously once a handler is attached", () => {
-    const ev = fakeEvent<[number]>();
-    const d = M.deferredListener(ev);
-    const seen: number[] = [];
-    d.handle(n => seen.push(n));
-
-    ev.send(3);
-    // No await in between: Firefox only allows opening the sidebar from
-    // a handler that runs in the same turn as the user's click.
-    expect(seen).to.deep.equal([3]);
-  });
-
-  it("does not replay events twice", () => {
+  it("delivers later events synchronously, after replaying early ones once", () => {
     const ev = fakeEvent<[number]>();
     const d = M.deferredListener(ev);
     ev.send(1);
     const seen: number[] = [];
     d.handle(n => seen.push(n));
+
     ev.send(2);
+    // No await in between: Firefox only allows opening the sidebar from
+    // a handler that runs in the same turn as the user's click.
     expect(seen).to.deep.equal([1, 2]);
   });
 });
@@ -333,7 +318,7 @@ In `src/util/index.ts`, directly after the closing `}` of `asyncEvent`, add:
  * and replayed in order; after that, events reach the handler synchronously.
  *
  * A Chrome (MV3) service worker only receives the event that woke it if the
- * listener was added during the worker's first turn.  [RFC 0001 §2a] */
+ * listener was added during the worker's first turn. */
 export function deferredListener<L extends (...args: any[]) => any>(event: {
   addListener(l: L): void;
 }): {handle(l: L): void} {
@@ -357,7 +342,7 @@ export function deferredListener<L extends (...args: any[]) => any>(event: {
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `bin/dev run make check-tests`
-Expected: PASS (626 passing).
+Expected: PASS (624 passing).
 
 - [ ] **Step 5: Register the background's listeners at load time**
 
@@ -381,12 +366,12 @@ import {
 
 ```ts
 // The toolbar button's API is `action` under MV3 (Chrome) and `browserAction`
-// under MV2 (Firefox).  [RFC 0001 §2e]
+// under MV2 (Firefox).
 const action = browser.action ?? browser.browserAction;
 
 // A Chrome (MV3) service worker only receives the event that woke it if the
 // listener was added synchronously at load.  Add them here; the handlers are
-// attached below once the model has loaded.  [RFC 0001 §2a]
+// attached below once the model has loaded.
 const onMenuClicked = deferredListener(browser.contextMenus.onClicked);
 const onActionClicked = action ? deferredListener(action.onClicked) : undefined;
 const onPageActionClicked = browser.pageAction
@@ -465,7 +450,7 @@ Expected: exactly one hit, the alias line `const action = browser.action ?? brow
 - [ ] **Step 6: Run the full build and tests**
 
 Run: `bin/dev run make`
-Expected: exit 0 (626 passing), and `git diff master -- assets/manifest.json` prints nothing.
+Expected: exit 0 (624 passing), and `git diff master -- assets/manifest.json` prints nothing.
 
 - [ ] **Step 7: Commit**
 
@@ -505,29 +490,19 @@ EOF
 
 The maintainer asked for the Chrome manifest to stay generated from `assets/manifest.json` by this script (PR #711, see `CLAUDE.md`). Do not add a second manifest file.
 
-- [ ] **Step 1: Record the current output**
-
-Run: `bin/dev run sh -c 'node patch-manifest-for-chrome.js > /tmp/before.json && grep -c "manifest_version\": 2" /tmp/before.json'`
-Expected: `1`. Today's script emits MV2.
-
-- [ ] **Step 2: Rewrite `patch-manifest-for-chrome.js`**
+- [ ] **Step 1: Rewrite `patch-manifest-for-chrome.js`**
 
 Replace the whole file with:
 
 ```js
 // Generates Chrome's Manifest V3 manifest from the Firefox (MV2) one, so that
-// changes to assets/manifest.json carry over to Chrome automatically.
-// [RFC 0001 §1]
+// changes to assets/manifest.json carry over to Chrome automatically.  Missing
+// keys make this throw, which fails the build.
 
 import manifest from "./assets/manifest.json" with {type: "json"};
 
-function required(value, what) {
-  if (value === undefined) throw new Error(`${what} key missing`);
-  return value;
-}
-
 manifest.manifest_version = 3;
-// Chrome 148 exposes extension APIs natively as browser.*.  [RFC 0001 R12]
+// Chrome 148 exposes extension APIs natively as browser.*.
 manifest.minimum_chrome_version = "148";
 delete manifest.browser_specific_settings;
 
@@ -537,23 +512,27 @@ const permsToDrop = [
   "contextualIdentities",
   "cookies",
 ];
-manifest.permissions = required(manifest.permissions, "permissions")
+manifest.permissions = manifest.permissions
   .filter(p => !permsToDrop.includes(p))
   .concat(["alarms"]);
 
-const scripts = required(manifest.background?.scripts, "background.scripts");
+const scripts = manifest.background.scripts;
 if (scripts.length !== 1) {
-  throw new Error(`expected one background script, got ${scripts.length}`);
+  throw new Error(`expected exactly one background script`);
 }
 manifest.background = {service_worker: scripts[0]};
 
-manifest.action = required(manifest.browser_action, "browser_action");
+manifest.action = manifest.browser_action;
 delete manifest.browser_action;
 delete manifest.action.theme_icons;
 delete manifest.action.browser_style;
-const icon = required(manifest.action.default_icon, "action.default_icon");
+if (!manifest.action.default_icon) {
+  throw new Error(`browser_action.default_icon key not found`);
+}
 // Chrome doesn't support SVG icons; the build makes these PNGs.
-for (const k in icon) icon[k] = `icons/logo-${k}.png`;
+for (const k in manifest.action.default_icon) {
+  manifest.action.default_icon[k] = `icons/logo-${k}.png`;
+}
 
 delete manifest.page_action;
 delete manifest.sidebar_action;
@@ -561,18 +540,16 @@ delete manifest.sidebar_action;
 delete manifest.options_ui.browser_style;
 manifest.options_ui.open_in_tab = true;
 
+// Wrapping an undefined policy would not throw, so check it explicitly.
+if (typeof manifest.content_security_policy !== "string") {
+  throw new Error(`content_security_policy key missing`);
+}
 manifest.content_security_policy = {
-  extension_pages: required(
-    manifest.content_security_policy,
-    "content_security_policy",
-  ),
+  extension_pages: manifest.content_security_policy,
 };
 
-const commands = required(manifest.commands, "commands");
-commands._execute_action = required(
-  commands._execute_browser_action,
-  "commands._execute_browser_action",
-);
+const commands = manifest.commands;
+commands._execute_action = commands._execute_browser_action;
 commands._execute_action.suggested_key.default = "Alt+Shift+T";
 delete commands._execute_browser_action;
 delete commands._execute_sidebar_action;
@@ -581,7 +558,7 @@ delete commands._execute_page_action;
 console.log(JSON.stringify(manifest, undefined, 2));
 ```
 
-- [ ] **Step 3: Check the generated manifest**
+- [ ] **Step 2: Check the generated manifest**
 
 Run:
 
@@ -602,15 +579,15 @@ Expected (one line):
 3 true index.js {"16":"icons/logo-16.png","32":"icons/logo-32.png","64":"icons/logo-64.png"} sessions,tabs,tabGroups,bookmarks,contextMenus,storage,unlimitedStorage,alarms _execute_action object 0
 ```
 
-- [ ] **Step 4: Update the Makefile**
+- [ ] **Step 3: Update the Makefile**
 
-4a. Below the line `DIST_PKG = $(RELEASE_DIR)/$(PACKAGE)-$(FULL_VERSION).zip` (line 20), add:
+3a. Below the line `DIST_PKG = $(RELEASE_DIR)/$(PACKAGE)-$(FULL_VERSION).zip` (line 20), add:
 
 ```make
 CHROME_PKG = $(RELEASE_DIR)/$(PACKAGE)-chrome-$(FULL_VERSION).zip
 ```
 
-4b. Leave the existing `build-chrome-dbg` rule as it is. Directly after its `.PHONY: build-chrome-dbg` line, add:
+3b. Leave the existing `build-chrome-dbg` rule as it is. Directly after its `.PHONY: build-chrome-dbg` line, add:
 
 ```make
 
@@ -623,7 +600,7 @@ build-chrome-rel: build-rel
 .PHONY: build-chrome-rel
 ```
 
-4c. Directly after the `pkg-webext` rule's `.PHONY: pkg-webext` line, add:
+3c. Directly after the `pkg-webext` rule's `.PHONY: pkg-webext` line, add:
 
 ```make
 
@@ -635,9 +612,11 @@ pkg-chrome: clean-working-tree build-chrome-rel
 
 Recipe lines must start with a tab character, as in the rest of the Makefile.
 
-- [ ] **Step 5: Update the README**
+3d. In the `distclean` recipe, add `$(CHROME_PKG)` directly after `$(DIST_PKG)`, so `make distclean` also removes the Chrome zip.
 
-In `README.md`, replace line 58:
+- [ ] **Step 4: Update the README**
+
+In `README.md`, replace line 58, keeping its 3-space indent (it is a sub-item of step 4):
 
 ```markdown
 - `dist-chrome`: A highly-experimental port to Chrome (also unpacked)
@@ -650,12 +629,12 @@ with:
   newer (also unpacked). `make pkg-chrome` packs a release build of it.
 ```
 
-- [ ] **Step 6: Run the full build**
+- [ ] **Step 5: Run the full build**
 
 Run: `bin/dev run make`, then `git diff master -- assets/manifest.json`.
-Expected: `make` exits 0 (626 passing), `dist-chrome/manifest.json` contains `"manifest_version": 3`, and the diff prints nothing.
+Expected: `make` exits 0 (624 passing), `dist-chrome/manifest.json` contains `"manifest_version": 3`, and the diff prints nothing.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add patch-manifest-for-chrome.js Makefile README.md
@@ -680,103 +659,65 @@ EOF
 
 **Files:**
 
-- Modify: `src/index.ts` (top-level block from Task 2; the hidden-tab GC block at about line 440; the auto-discard `setTimeout` at about line 560; the GC block at the end of the file)
+- Modify: `src/index.ts` (top-level block from Task 2; the hidden-tab GC block at about line 440; just before the GC block at the end of the file)
 
 **Interfaces:**
 
 - Consumes: `deferredListener` and the top-level block from Task 2.
-- Produces: top-level `onAlarm` and `onBrowserStartup`, each `undefined` unless `browser.alarms` exists (Chrome only).
+- Produces: top-level `onAlarm`, `undefined` unless `browser.alarms` exists (Chrome only).
 
-- [ ] **Step 1: Add the alarm listeners at load**
+- [ ] **Step 1: Add the alarm listener at load**
 
 Append to the top-level block added in Task 2, after `onPageActionClicked`:
 
 ```ts
 // Chrome (MV3) only: the service worker restarts too often for timers, so
-// daily GC runs from an alarm and once per browser session.  Firefox's
-// manifest doesn't request "alarms", so these are undefined there.
-// [RFC 0001 §3c]
+// daily GC runs from an alarm.  Firefox's manifest doesn't request "alarms",
+// so this is undefined there.
 const onAlarm = browser.alarms
   ? deferredListener(browser.alarms.onAlarm)
   : undefined;
-const onBrowserStartup = browser.alarms
-  ? deferredListener(browser.runtime.onStartup)
-  : undefined;
 ```
 
-- [ ] **Step 2: Skip the hidden-tab jobs where tabs can't be hidden**
+- [ ] **Step 2: Skip the hidden-tab cleanup where tabs can't be hidden**
 
-2a. In the block that starts `logErrorsFrom(async () => {` followed by `let managed_urls = await model.bookmarks.urlsInStash();` (about line 440), insert a first line so it reads:
+In the block that starts `logErrorsFrom(async () => {` followed by `let managed_urls = await model.bookmarks.urlsInStash();` (about line 440), insert a first line so it reads:
 
 ```ts
   logErrorsFrom(async () => {
-    if (!browser.tabs.hide) return; // No hidden tabs to close [RFC 0001 §3c]
+    // Nothing to close where tabs can't be hidden, so skip walking the stash.
+    if (!browser.tabs.hide) return;
     let managed_urls = await model.bookmarks.urlsInStash();
 ```
 
-2b. Replace the auto-discard kick-off (just before the "Setup a periodic background job to cleanup" comment):
-
-```ts
-setTimeout(
-  discard_old_hidden_tabs,
-  model.options.local.state.autodiscard_interval_min * 60 * 1000,
-);
-```
-
-with:
-
-```ts
-if (browser.tabs.hide) {
-  // Only hidden tabs are discarded  [RFC 0001 §3c]
-  setTimeout(
-    discard_old_hidden_tabs,
-    model.options.local.state.autodiscard_interval_min * 60 * 1000,
-  );
-}
-```
+Leave the auto-discard `setTimeout` alone. On Chrome its timer dies with the worker, and it finds no hidden tabs anyway.
 
 - [ ] **Step 3: Use an alarm for GC on Chrome**
 
-Replace the end of the file, from `const gc = nonReentrant(() =>` through `gc();`. Keep the closing `}); // END FILE-WIDE ASYNC BLOCK` line. The new code:
+Directly before the line `const gc = nonReentrant(() =>` near the end of the file, insert:
 
 ```ts
-if (onAlarm && onBrowserStartup) {
-  const gc = nonReentrant(() => model.attempt(() => model.gc()));
-  onAlarm.handle(alarm => {
-    if (alarm.name === "gc") gc();
-  });
-  onBrowserStartup.handle(() => gc());
-
+if (onAlarm) {
+  onAlarm.handle(() => model.attempt(() => model.gc()));
   // create() replaces an existing alarm and restarts its period, and this
-  // code runs on every wake, so only create it when it's missing.
-  // [RFC 0001 §3c]
+  // code runs on every wake, so only create it when it's missing.  The
+  // first GC comes a minute later, e.g. after a fresh install.
   if (!(await browser.alarms.get("gc"))) {
-    await browser.alarms.create("gc", {periodInMinutes: 24 * 60});
+    await browser.alarms.create("gc", {
+      delayInMinutes: 1,
+      periodInMinutes: 24 * 60,
+    });
   }
-} else {
-  const gc = nonReentrant(() =>
-    model.attempt(async () => {
-      // Hard-coded to a day for now, for people who don't restart their
-      // browsers regularly.  If this ever needs to be changed, we can
-      // always add an option for it later.
-      setTimeout(gc, 24 * 60 * 60 * 1000);
-
-      await model.gc();
-    }),
-  );
-
-  // Here we call gc() on browser restart to ensure it happens
-  // at least once.
-  gc();
+  return;
 }
 ```
 
-The `else` branch is today's code unchanged, re-indented one level. It is what Firefox runs.
+Leave the existing GC code below it unchanged. Firefox runs it as before; Chrome returns before reaching it.
 
 - [ ] **Step 4: Run the full build and tests**
 
 Run: `bin/dev run make`
-Expected: exit 0 (626 passing).
+Expected: exit 0 (624 passing).
 
 - [ ] **Step 5: Commit**
 
@@ -788,9 +729,9 @@ feat(rfc-0001): run Chrome's daily GC from an alarm
 A Chrome service worker restarts often, so a setTimeout loop would not
 survive and the startup gc() would run on every wake. Where
 browser.alarms exists (Chrome), GC runs from a daily alarm, created
-only if missing so wakes don't reset it, and on runtime.onStartup. The
-hidden-tab jobs are skipped where tabs can't be hidden. Firefox keeps
-its timers unchanged.
+only if missing so wakes don't reset it. The hidden-tab cleanup, which
+walks the whole stash, is skipped where tabs can't be hidden. Firefox's
+GC code is unchanged.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
@@ -814,43 +755,45 @@ EOF
 In the top-level block from Task 2, directly after the `const action = ...` line, add:
 
 ```ts
-// Menu contexts follow manifest rules, not browser features: MV3 names the
-// toolbar button's context "action" and has no page action.  [RFC 0001 §3a]
-const MV3 = browser.runtime.getManifest().manifest_version === 3;
+// Firefox only exposes browser.action under MV3, and MV3 renames the toolbar
+// button's menu context to "action".
+const MV3 = !!browser.action;
 ```
 
-- [ ] **Step 2: Map contexts and skip empty menus**
+- [ ] **Step 2: Map the toolbar context, and create the page-action menu only where page actions exist**
 
-In `function menu(idprefix, contexts, def)`, insert this as the first statement of the body, before the `// Only create menus in contexts this browser understands.` comment:
+2a. In `function menu(idprefix, contexts, def)`, insert this as the first statement of the body, before the `// Only create menus in contexts this browser understands.` comment:
 
 ```ts
 if (MV3) {
-  contexts = contexts.flatMap((c): Menus.ContextType[] =>
-    c === "browser_action" ? ["action"] : c === "page_action" ? [] : [c],
-  );
+  contexts = contexts.map(c => (c === "browser_action" ? "action" : c));
 }
 ```
 
-Directly after the existing line `contexts = contexts.filter(x => allowed_ctxs.includes(x));`, add:
+2b. Wrap the third `menu(` call, the one with prefix `"3:"` and context `["page_action"]`, in a check, as the code already does for `browser.sidebarAction`:
 
 ```ts
-if (contexts.length === 0) return;
+if (browser.pageAction) {
+  menu("3:", ["page_action"], [/* existing items, unchanged */]);
+}
 ```
+
+Keep the existing items exactly as they are; only the `if` and the indentation change.
 
 - [ ] **Step 3: Re-create menus cleanly on every wake**
 
 Directly before the first `menu(` call (the one with prefix `"1:"`), add:
 
 ```ts
-// Chrome keeps menus across service-worker restarts, and creating an
-// existing ID fails, so start from a clean slate.  [RFC 0001 §3a]
+// Chrome may keep menus across service-worker restarts, and creating an
+// existing ID fails, so start from a clean slate.
 if (MV3) await browser.contextMenus.removeAll();
 ```
 
 - [ ] **Step 4: Run the full build and tests**
 
 Run: `bin/dev run make`
-Expected: exit 0 (626 passing).
+Expected: exit 0 (624 passing).
 
 - [ ] **Step 5: Commit**
 
@@ -859,12 +802,12 @@ git add src/index.ts
 git commit -F - <<'EOF'
 feat(rfc-0001): create context menus with MV3 contexts on Chrome
 
-Under MV3 the toolbar button's menu context is "action" and there is no
-page action, so map browser_action to action and drop page_action
-before filtering by the browser's ContextType. Skip menus left with no
-contexts. Clear existing menus first under MV3, since Chrome keeps them
-across service-worker restarts and rejects duplicate IDs. Firefox's MV2
-build is unaffected.
+Under MV3 the toolbar button's menu context is "action", so map
+browser_action to action before filtering by the browser's ContextType.
+Create the page-action menu only where page actions exist, as the code
+already does for the sidebar. Clear existing menus first under MV3,
+since Chrome may keep them across service-worker restarts and rejects
+duplicate IDs. Firefox's MV2 build is unaffected.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
@@ -878,7 +821,7 @@ A subagent cannot run this task: it needs real browsers on the user's machine. T
 
 **Files:**
 
-- Modify: `rfcs/0001_chrome-mv3-separate-manifest.md` (Open questions 3, 4, 7, 9; a new "Validation results" subsection at the end of Rollout)
+- Modify: `rfcs/0001_chrome-mv3-separate-manifest.md` (Open questions 3, 4, 7, 8, 9; a new "Validation results" subsection at the end of Rollout)
 
 - [ ] **Step 1: Build both browsers' output**
 
@@ -908,6 +851,7 @@ Load `dist-chrome/` via `chrome://extensions` → Developer mode → **Load unpa
 - [ ] Every RFC Goal 1 item works from a cold start: stash all, stash the current tab, stash pinned tabs, copy to stash, restore, the stash list in a tab and in popup mode, deleted items and undelete.
 - [ ] Every context menu item works, including the toolbar right-click menu.
 - [ ] Stop the worker (`chrome://extensions` → "service worker" → DevTools → Application → Service workers → **Stop**). Then each of these works on the first try: the toolbar button in normal and popup mode, every context menu item, opening the stash list, and opening Deleted Items.
+- [ ] After a forced stop, before clicking anything, check whether the context menus and the popup setting are still there (Open question 8).
 - [ ] Stop the worker with the stash list open, then delete a bookmark. Deleted Items shows it.
 - [ ] In the service worker console, `await chrome.alarms.get("gc")` returns an alarm. Its `scheduledTime` is unchanged after a stop and wake.
 - [ ] **Measure for the RFC:**
@@ -933,7 +877,7 @@ If the fix contradicts the RFC, update the RFC first in a `docs(rfc-0001): ...` 
 In `rfcs/0001_chrome-mv3-separate-manifest.md`:
 
 - Add a `### Validation results` subsection at the end of `## Rollout`, listing each checklist item with pass or fail and the measured values.
-- Mark Open questions 3, 4, 7 and 9 as resolved, with the answers.
+- Mark Open questions 3, 4, 7, 8 and 9 as resolved, with the answers.
 
 Then run `bin/dev run make check-style` and fix any Prettier issues with `bin/dev run make fix-style`.
 
