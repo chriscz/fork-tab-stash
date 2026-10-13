@@ -6,7 +6,42 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 
 ## Open bugs
 
-None.
+### Showing the popup clears the toolbar button's popup
+
+- **Where:** `src/index.ts`, the `finally` of `commands.show_popup`.
+- **What:** `show_popup` sets the browser action's popup, opens it, and then
+  sets the popup to `""` whatever `browser_action_show` says. That undoes
+  `setupPopup()`, which sets the popup while `browser_action_show` is
+  `"popup"` so that a toolbar click opens it natively. The clear is there
+  for Chrome, where a set popup stops `browserAction.onClicked` from firing.
+  After any `show_popup`, every toolbar click goes to `onClicked` instead,
+  until a sync option changes and `setupPopup()` runs again. `onClicked`
+  then calls `show_popup`, which calls `openPopup()` after an `await`
+  (which `setupPopup()`'s own comment says Firefox doesn't allow), and
+  runs `browser_action_stash`.
+- **Effect:** none a user can see in the Firefox the suite runs (157.0.1).
+  Its `extensions.openPopupWithoutUserGesture.enabled` defaults to `true`,
+  so `openPopup()` after an `await` works, and `browser_action_stash` is
+  always `"none"` while the toolbar shows the popup (`canBrowserActionShow()`
+  in `src/model/options.ts`). Chrome's `action.openPopup()` needs no gesture
+  either, so by reading it behaves the same. Where that pref is `false`, the
+  button stops opening the popup after the clear, but there the menu command
+  that clears it doesn't open the popup either. Reaching `show_popup` at all needs
+  `open_stash_in` set to `"popup"`, which no release offers (see "Showing
+  the popup also opens the sidebar" below).
+- **Found:** review of the fix for "Showing the popup also opens the
+  sidebar", 2026-10-14. Probed in Firefox 157.0.1 with both options set to
+  `"popup"`: before the menu command `browserAction.getPopup({})` returned
+  the popup's URL; after "Stash This Tab" from a tab's context menu it
+  returned `""`. Later toolbar clicks (through the browser action's
+  `triggerAction`, as Firefox's own button and shortcut do) still showed the
+  popup through `onClicked`, kept the sidebar closed, left the tabs alone and
+  logged no errors, the same as before the menu command. With the pref set
+  to `false`, neither the menu command nor later toolbar clicks showed the
+  popup, and nothing was logged.
+- **Fix:** not yet. `show_popup`'s `finally` could restore what
+  `setupPopup()` wants (the popup's URL while `browser_action_show` is
+  `"popup"`, otherwise `""`) instead of always clearing it.
 
 ## Fixed in this fork
 
