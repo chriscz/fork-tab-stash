@@ -30,7 +30,7 @@ The output still says `"manifest_version": 2`. No Chrome release target exists. 
 - No `<any>` casts.
 - Don't skip `navigator.storage.persist()` without showing that deleted items stay safe.
 
-`CLAUDE.md` records these preferences in full.
+His views on a Chrome port are collected in [maintainer-views.md](0001_chrome-mv3-separate-manifest.d/maintainer-views.md); his general preferences are in `CLAUDE.md`.
 
 **What the background does.** UI pages build their own tabs, bookmarks, options and containers models directly from browser APIs (`src/globals-ui.ts:61-93`). They depend on the background for three things:
 
@@ -60,6 +60,7 @@ Five smaller breakages:
 - **Toolbar-button checks.** They use `if (browser.browserAction)` (`src/index.ts:322`, `:413`), and MV3 renames the namespace to `action` [R7], so the button would silently stop working. The unguarded calls in `show_popup` (`:178-183`) would throw.
 - **Context menus.** The toolbar right-click menu uses the `browser_action` context (`src/index.ts:131-142`). Chrome documents `action` as the context for the toolbar button [R22]. `menu()` drops any context the browser does not list (`:73-89`), so that menu may silently disappear.
 - **Startup GC.** The unconditional `gc()` at startup (`src/index.ts:584`) would run on every wake instead of once per browser session.
+- **Locale message keys.** Chrome refuses to load an extension whose locale message keys contain anything but `[A-Za-z0-9_]`. The plural keys added in September 2026 (commit `8117e3d`) use a dot, such as `child_group.one`, so the Chrome build hasn't loaded since then. The new end-to-end test found this: `Extensions.loadUnpacked: Name of a key "child_group.one" is invalid`.
 
 **Some differences are Chrome's, not MV3's.** Chrome lacks four Firefox features, and the code already feature-detects each one:
 
@@ -159,6 +160,8 @@ Changes to the script, compared with today's output:
 - **Options page.** `options_ui.browser_style` is dropped. `open_in_tab` stays `true`, as today.
 
 Like today's script, it throws if a key it expects is missing, so a change to the Firefox manifest's shape fails the build instead of producing a broken Chrome manifest.
+
+**Plural message keys use `_` instead of `.`.** `src/util/i18n.ts` looks up plural messages as `` `${keyBase}.${category}` ``, and `check-i18n.js` splits keys the same way. We change the separator to `_` (`child_group_one`) in the lookup, in `check-i18n.js`, and in the two locales that have plural keys (`en` and `ru`). Both browsers then use the same keys. Rewriting keys only in the Chrome build would hide the difference instead of removing it.
 
 **The background bundle needs no format change.** Vite already emits `src/index.ts` as one self-contained file: the built `dist/index.js` contains no `import` or `export` statements and no dynamic imports. It therefore runs as a classic worker script.
 
@@ -375,6 +378,10 @@ Each of these is gated so that Firefox's MV2 build never runs it:
 - **GC alarm check:** run `chrome.alarms.get("gc")` before and after a stop and wake, and confirm `scheduledTime` is unchanged.
 
 **Phase 4: Distribution.** The maintainer decides. It needs a Chrome Web Store developer account and listing [R13]. Until then, Chrome builds are for developers only.
+
+**Automated checks.** Where Chrome allows, Phase 0 and Phase 3 run as Puppeteer end-to-end tests in the dev Docker image (`make check-e2e-chrome`). The tests drive Chrome for Testing, stop the service worker, and assert on what a user would see. Puppeteer can't load extensions into Firefox, so a separate check confirms the Firefox build installs and its pages load. Firefox's behaviour is otherwise covered by the unit tests, since this stack doesn't change it. Native context menus can't be clicked from Puppeteer, so those items stay on the manual checklist.
+
+**If core functionality is broken.** This RFC aims for parity with Firefox on core functionality in Chrome. If the checks show something core is broken in a way that needs architectural change, it goes to a second RFC rather than growing this one. The likely case is the maintainer's "single biggest barrier": operations started in Chrome's popup are cut off when the popup closes, which needs tab, window and bookmark changes moved out of the UI (see [maintainer-views.md](0001_chrome-mv3-separate-manifest.d/maintainer-views.md)). If everything keeps working, that larger change is postponed.
 
 Phases 1–3 are separate PRs. If Phase 2 or 3 stalls, Phase 1 still stands, because Phase 0 has already shown the design works on Chrome.
 
