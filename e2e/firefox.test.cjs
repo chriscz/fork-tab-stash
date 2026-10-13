@@ -1,7 +1,8 @@
 // End-to-end test of the Firefox (Manifest V2) build in a real browser.
 //
-// It installs dist/ as a temporary (so unsigned) add-on, opens the stash list
-// at its moz-extension:// URL and checks that the page starts up.
+// It installs dist/ (or $E2E_DIST) as a temporary (so unsigned) add-on, opens
+// the stash list at its moz-extension:// URL and checks that the page starts
+// up.
 //
 // Firefox's WebDriver BiDi ignores extension pages (Mozilla bug 1755014): it
 // sends no load, console or error events for them and doesn't run preload
@@ -12,7 +13,8 @@
 //
 // Run it with `make check-e2e-firefox` (builds dist/ first).  It needs
 // Puppeteer and Firefox from install-test-deps.sh, which the dev Docker image
-// already has: `bin/dev run make check-e2e-firefox`.
+// already has: `bin/e2e test --browser=firefox`, or with `--ref=<commit>` to
+// test another commit's build.
 // The e2e tests are supported only in that image (on macOS, use Colima or a
 // similar Docker runtime).
 
@@ -21,7 +23,8 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const puppeteer = require("puppeteer");
 
-const EXTENSION_DIR = path.resolve(__dirname, "..", "dist");
+// E2E_DIST points at another build, e.g. the one check-e2e-ref makes.
+const EXTENSION_DIR = path.resolve(process.env.E2E_DIST ?? "dist");
 const ADDON_ID = "tab-stash@condordes.net";
 // Firefox gives each add-on a random moz-extension:// host per profile; this
 // pins it so the test knows the URL of the extension's pages.

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Run Tab Stash's end-to-end tests inside the dev Docker image.  This only
+# picks the Makefile target and environment; bin/dev runs it.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+    cat <<EOF
+Usage: bin/e2e <command> [options]
+
+Commands:
+  test                Run the end-to-end tests (see "Test options" below)
+  help                Show this help
+
+Test options:
+  --browser=<name>    Required: firefox or chrome
+  --ref=<commit>      Build <commit> (cached per commit) and run this
+                      checkout's tests against that build instead of the
+                      working tree.  Firefox only.
+  --update-goldens    Write golden screenshots instead of comparing them.
+                      Needs --ref, so goldens only come from a commit.
+
+The tests run only inside the dev Docker image (on macOS, use Colima or a
+similar Docker runtime).
+
+Examples:
+  bin/e2e test --browser=firefox
+  bin/e2e test --browser=firefox --ref=622bf3d
+  bin/e2e test --browser=firefox --ref=622bf3d --update-goldens
+  bin/e2e test --browser=chrome
+EOF
+}
+
+die() {
+    echo "bin/e2e: $*" >&2
+    exit 1
+}
+
+run_test() {
+    local browser="" ref="" update=0
+    for arg in "$@"; do
+        case "$arg" in
+            --browser=firefox | --browser=chrome) browser="${arg#--browser=}" ;;
+            --ref=-*) die "--ref must be a commit, not an option: $arg" ;;
+            --ref=?*) ref="${arg#--ref=}" ;;
+            --update-goldens) update=1 ;;
+            *) echo "bin/e2e: unknown argument: $arg" >&2; usage >&2; exit 1 ;;
+        esac
+    done
+
+    [ -n "$browser" ] || die "--browser=firefox or --browser=chrome is required"
+    [ "$update" = 0 ] || [ -n "$ref" ] || die "--update-goldens needs --ref=<commit>"
+
+    if [ "$browser" = chrome ]; then
+        [ -z "$ref" ] && [ "$update" = 0 ] ||
+            die "--ref and --update-goldens are Firefox-only for now"
+        exec "$ROOT/bin/dev" run make check-e2e-chrome
+    fi
+
+    if [ -n "$ref" ]; then
+        exec "$ROOT/bin/dev" run env UPDATE_SCREENSHOTS="$update" \
+            make check-e2e-ref E2E_REF="$ref"
+    fi
+    exec "$ROOT/bin/dev" run make check-e2e-firefox
+}
+
+case "${1:-help}" in
+    test) shift; run_test "$@" ;;
+    help | -h | --help) usage ;;
+    *) usage >&2; exit 1 ;;
+esac

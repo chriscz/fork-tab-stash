@@ -61,9 +61,31 @@ check-e2e-chrome: build-chrome-dbg
 	node --test e2e/chrome.test.cjs
 .PHONY: check-e2e-chrome
 
+E2E_DIST ?= dist
+
 check-e2e-firefox: build-dbg
-	node --test e2e/firefox.test.cjs
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/firefox.test.cjs
 .PHONY: check-e2e-firefox
+
+# Builds E2E_REF once (cached per resolved commit, inside the bind-mounted repo
+# so it survives between containers) and runs this checkout's Firefox tests
+# against that build.  node_modules/ is gitignored, so git and Prettier skip the
+# cache.  The cache is keyed by the full hash so a branch name or HEAD can't go
+# stale, and a build only counts once .e2e-built exists: dist/ appears early, so
+# an interrupted build would otherwise be reused as if it were complete.
+check-e2e-ref:
+	@test -n "$(E2E_REF)" || { echo "Set E2E_REF=<commit>" >&2; exit 1; }
+	@sha="$$(git rev-parse --verify --quiet "$(E2E_REF)^{commit}")" || { \
+	  echo "E2E_REF does not resolve to a commit: $(E2E_REF)" >&2; exit 1; }; \
+	dir="node_modules/.cache/e2e-ref/$$sha"; \
+	test -e "$$dir/.e2e-built" || ( \
+	  rm -rf "$$dir" && \
+	  git clone --quiet . "$$dir" && \
+	  git -C "$$dir" checkout --quiet "$$sha" && \
+	  $(MAKE) -C "$$dir" build-dbg && \
+	  touch "$$dir/.e2e-built" ) && \
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST="$$dir/dist" node --test e2e/firefox.test.cjs
+.PHONY: check-e2e-ref
 
 fix-style: node_modules
 	./node_modules/.bin/prettier --ignore-path .gitignore --write .
