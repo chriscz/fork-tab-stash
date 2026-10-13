@@ -3,7 +3,7 @@
 - Status: draft
 - Author(s): Chris Coetzee, Claude
 - Date: 2026-10-13
-- Links: [RFC 0001](0001_chrome-mv3-separate-manifest.md) (which will use this suite for Chrome); maintainer views in [maintainer-views.md](0001_chrome-mv3-separate-manifest.d/maintainer-views.md)
+- Links: [RFC 0001](0001_chrome-mv3-separate-manifest.md) (which runs this suite on Chrome); maintainer views in [maintainer-views.md](0001_chrome-mv3-separate-manifest.d/maintainer-views.md)
 
 ## Problem
 
@@ -31,7 +31,7 @@ On its first run the Chrome test found a real bug: Chrome rejected the dotted pl
   - real user gestures;
   - Puppeteer's `triggerExtensionAction()`, which is CDP-only.
 
-Chrome needs none of these workarounds: Puppeteer's `page.goto`, `page.screenshot` and `pageerror` work on its extension pages.
+Chrome needs none of these workarounds: Puppeteer's `page.goto`, `page.evaluate`, `page.screenshot` and `pageerror` work on its extension pages over CDP. Its background is a service worker, which reports errors only on its own CDP session (`Runtime.exceptionThrown`).
 
 **What the pages offer a test.** The code already exposes what we need:
 
@@ -62,7 +62,7 @@ Chrome needs none of these workarounds: Puppeteer's `page.goto`, `page.screensho
 
 ## Non-goals
 
-- **Running the suite on Chrome.** That belongs to RFC 0001. Specs may already carry `browser: chrome` steps, but those are unverified expectations until RFC 0001 runs them.
+- **Running the suite on Chrome.** That belongs to RFC 0001, which built the Chrome adapter and ran every spec's `browser: chrome` steps; its "Phase 3 parity results" record the outcome.
 - **Things a page can't drive:** the toolbar button, context menus, keyboard shortcuts, the real sidebar, and drag-and-drop. They stay on the manual checklist. Drag-and-drop ends in the same `putItemsInFolder`/`putItemsInWindow` calls the buttons use.
 - **Cross-OS rendering checks.** The maintainer wants Chrome checked on Windows, macOS and Linux; that's manual. This suite's screenshots compare the same browser, in the same image, against itself.
 - **Clipboard export and copy.** These need a user gesture (`execCommand('copy')`).
@@ -82,13 +82,15 @@ e2e/
     runner.cts                # reads spec.yml, runs and checks the steps
     driver.cts                # the browser-neutral interface suites use
     firefox.cts               # Firefox adapter (BiDi workarounds live here)
-    chrome.cts                # Chrome adapter (plain Puppeteer)
+    chrome.cts                # Chrome adapter (Puppeteer over CDP)
     fixtures.cts              # shared Given steps, e.g. "after E2"
   tests/
     e02-stash-all/
       spec.yml                # the source: plain-English Given / When / Then
       suite.cts               # one function per step, bound to spec.yml
       screenshots/firefox/    # golden images, generated from the baseline
+        stash-list-after-stash.png
+      screenshots/chrome/     # Chrome's goldens, from a pinned fork commit
         stash-list-after-stash.png
 ```
 
@@ -201,23 +203,25 @@ Suites are TypeScript, run by Node's built-in test runner (`node:test`, `node:as
 
 **The driver** (`driver.cts`) is the only API suites use. It fills in what Puppeteer can't do in each browser, so suites never call BiDi, CDP or Firefox internals (`Services`, `gBrowser`) themselves:
 
-| Driver method                                                                                                                                                                           | Firefox adapter                                                                                                                        | Chrome adapter                                         |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `open(page)` (the page may carry a query, e.g. `stash-list.html?q=x`); waits for the page to finish starting (`globalThis.app` is set)                                                  | raw BiDi `browsingContext.navigate` to the pinned `moz-extension://` URL                                                               | `page.goto("chrome-extension://<id>/…")`               |
-| `eval(js)`, `click(sel, mods?)`, `waitFor(js)`, `waitUntil(fn)` (both wait functions poll every 100 ms, up to 30 s)                                                                     | BiDi `script.evaluate` in the page                                                                                                     | `page.evaluate`, `page.click`, `page.waitForFunction`  |
-| `openPages(n)` (pages 1 to n) or `openPages(list)` (just those pages), waiting for them to load; `pageUrls(n)`, `pageUrl(n)`                                                            | background tabs on the local HTTP server                                                                                               | same                                                   |
-| `stash()`, `tabs(query)`, `tabMarker(id)`, `seed(state)`                                                                                                                                | the page's own `browser.bookmarks`/`tabs`/`sessions`/`storage`                                                                         | same, through `page.evaluate`                          |
-| `stash()` retries for up to 5 s, since reading fails while the model is mid-update; `tabs({url})` matches `url` (a string or a list) exactly, because match patterns can't carry a port | done in the driver, over the page's `browser.bookmarks` and `browser.tabs`                                                             | same                                                   |
-| `showAllFolders()`                                                                                                                                                                      | scrolls each folder into view, so lazy children render (`load-more.vue`)                                                               | same                                                   |
-| `visibleStashTitles()`                                                                                                                                                                  | titles of the stash folders and bookmarks the page shows, top to bottom, leaving out the open-tabs list                                | same                                                   |
-| `clickInRow(rowSel, title, target, mods?)`, `clickInFolder(title, target, mods?)`                                                                                                       | a synthetic click on `target` in the row whose `.forest-title` is `title`, or in the children listed after it                          | same                                                   |
-| `type(sel, text)`, `press(sel, key)`                                                                                                                                                    | sets an input's value and fires `input`; dispatches `keydown` then `keyup`                                                             | same                                                   |
-| `activate()`                                                                                                                                                                            | makes the test's tab active again with `browser.tabs.update`                                                                           | same                                                   |
-| `message(key)`, `vars`                                                                                                                                                                  | the English text of a message from the build's `_locales/en/messages.json`; scratch space for a value one step records for a later one | same                                                   |
-| `screenshot()`                                                                                                                                                                          | `drawSnapshot` from the chrome context, encoded as PNG                                                                                 | `page.screenshot()`                                    |
-| `errors()`                                                                                                                                                                              | Firefox's console service plus `error_log`                                                                                             | `pageerror` events plus `error_log`                    |
-| `restartBackground()`, then the driver reopens the page, retrying with 5 s per attempt; a timeout reports the last error                                                                | moves the test's tab to `about:blank`, then reloads the add-on through the add-on manager from the chrome context (Open question 2)    | `WebWorker.close()`, then waits for the worker to wake |
-| `screenshot({mask})`: masks before capture                                                                                                                                              | overlays fixed-position black boxes on the masked regions, captures, removes them                                                      | same                                                   |
+| Driver method                                                                                                                                                                           | Firefox adapter                                                                                                                        | Chrome adapter                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `open(page)` (the page may carry a query, e.g. `stash-list.html?q=x`); waits for the page to finish starting (`globalThis.app` is set)                                                  | raw BiDi `browsingContext.navigate` to the pinned `moz-extension://` URL                                                               | `page.goto("chrome-extension://<id>/…")`, with the id `installExtension()` returned                                                                                            |
+| `eval(js)`, `click(sel, mods?)`, `waitFor(js)`, `waitUntil(fn)` (both wait functions poll every 100 ms, up to 30 s)                                                                     | BiDi `script.evaluate` in the page                                                                                                     | `page.evaluate` in the page; clicks and waits are built on `eval` in the driver, as on Firefox                                                                                 |
+| `openPages(n)` (pages 1 to n) or `openPages(list)` (just those pages), waiting for them to load; `pageUrls(n)`, `pageUrl(n)`                                                            | background tabs on the local HTTP server                                                                                               | same                                                                                                                                                                           |
+| `stash()`, `tabs(query)`, `tabMarker(id)`, `seed(state)`                                                                                                                                | the page's own `browser.bookmarks`/`tabs`/`sessions`/`storage`                                                                         | same, through `page.evaluate`. `tabs()` filters on `hidden` itself, since Chrome rejects it as a query key, and `tabMarker()` is false where `sessions.getTabValue` is missing |
+| `stash()` retries for up to 5 s, since reading fails while the model is mid-update; `tabs({url})` matches `url` (a string or a list) exactly, because match patterns can't carry a port | done in the driver, over the page's `browser.bookmarks` and `browser.tabs`                                                             | same                                                                                                                                                                           |
+| `showAllFolders()`                                                                                                                                                                      | scrolls each folder into view, so lazy children render (`load-more.vue`)                                                               | same                                                                                                                                                                           |
+| `visibleStashTitles()`                                                                                                                                                                  | titles of the stash folders and bookmarks the page shows, top to bottom, leaving out the open-tabs list                                | same                                                                                                                                                                           |
+| `clickInRow(rowSel, title, target, mods?)`, `clickInFolder(title, target, mods?)`                                                                                                       | a synthetic click on `target` in the row whose `.forest-title` is `title`, or in the children listed after it                          | same                                                                                                                                                                           |
+| `type(sel, text)`, `press(sel, key)`                                                                                                                                                    | sets an input's value and fires `input`; dispatches `keydown` then `keyup`                                                             | same                                                                                                                                                                           |
+| `activate()`                                                                                                                                                                            | makes the test's tab active again with `browser.tabs.update`                                                                           | same                                                                                                                                                                           |
+| `message(key)`, `vars`                                                                                                                                                                  | the English text of a message from the build's `_locales/en/messages.json`; scratch space for a value one step records for a later one | same                                                                                                                                                                           |
+| `screenshot()`                                                                                                                                                                          | `drawSnapshot` from the chrome context, encoded as PNG                                                                                 | `page.screenshot()`                                                                                                                                                            |
+| `errors()`                                                                                                                                                                              | Firefox's console service plus `error_log`                                                                                             | `pageerror` on extension pages and `Runtime.exceptionThrown` on each service-worker target, plus `error_log`                                                                   |
+| `restartBackground()`, then the driver reopens the page, retrying with 5 s per attempt; a timeout reports the last error                                                                | moves the test's tab to `about:blank`, then reloads the add-on through the add-on manager from the chrome context (Open question 2)    | moves the test's tab to `about:blank`, then closes the service worker's target and waits for it to go; reopening the page wakes the worker                                     |
+| `screenshot({mask})`: masks before capture                                                                                                                                              | overlays fixed-position black boxes on the masked regions, captures, removes them                                                      | same                                                                                                                                                                           |
+
+**The Chrome adapter** (`chrome.cts`) launches headless Chrome through Puppeteer, loads the build with `installExtension()`, and drives the single tab Chrome starts with, so a window holds only the tabs a test opens. It stays attached to the service worker to hear its errors, which also keeps Chrome from stopping the worker when idle; only `restartBackground()` stops it.
 
 **Shared setup** (`fixtures.cts`). Common `given` steps live here as named functions: `threeOpenPages`, `stashedThreePages` ("after E2"), and `given.deletedFolder(h, title, pages)`, which seeds a folder and deletes it through its menu (E10, E19). Specs that start "after E2" bind to the fixture rather than depend on another test, so every test still runs on its own in a fresh browser.
 
@@ -233,37 +237,37 @@ Tests about hiding tabs keep the default `after_stashing_tab: "hide"`.
 
 - **Fixed viewport:** 1000×700.
 - **Fixed locale and timezone:** `TZ=UTC` and `intl.locale.requested=en-US` (Firefox) or `--lang=en-US` (Chrome).
-- **Pinned rendering:** the browsers and fonts are pinned in the image.
+- **Pinned rendering:** the browsers and fonts are pinned in the image. Chrome also runs with `--disable-partial-raster`; without it, anti-aliased edges and text differed by a few colour levels between runs.
 - **Settle wait:** a short wait before each capture.
 - **Masked regions** for anything that shows a time or date. Tab Stash renders the current date and time in places such as folder names (`Saved 10/13/2026, 2:04:31 PM`) and Deleted Items' day headers. Specs mask those regions rather than control the clock, so the real clock runs everywhere. The driver overlays the masks in the page itself, so it works the same in every browser and needs no image library.
 
 ### 3. The test catalogue
 
-Each row seeds one `spec.yml`. Once the spec exists, the spec is the authority and this table is only an index. "Expected on Chrome" lists what RFC 0001 will need to verify, written as Chrome steps; "identical" means the same assertions apply.
+Each row seeds one `spec.yml`. Once the spec exists, the spec is the authority and this table is only an index. "On Chrome" lists the Chrome steps, which RFC 0001 ran and recorded in its "Phase 3 parity results"; "identical" means the same assertions apply.
 
-| ID  | Scenario                                          | Action (page UI)                                                                                   | Assertions (Firefox)                                                                                                                                                                          | Expected on Chrome (unverified)                             |
-| --- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| E1  | Extension installs and the stash list starts      | open `stash-list.html`                                                                             | `main.stash-list` renders; no errors (exists today)                                                                                                                                           | identical                                                   |
-| E2  | Stash all open tabs                               | open 3 local pages; click "stash all" in the open-tabs toolbar                                     | a new `saved-…` folder at index 0 of "Tab Stash" with the 3 URLs in tab order; the 3 tabs are hidden with the `hidden_by_tab_stash` marker; one visible tab remains; screenshot (time masked) | the 3 tabs are closed; the rest identical                   |
-| E3  | Stash one tab, twice                              | click "stash one" on two tab rows (scoped to the open-tabs list)                                   | both bookmarks land in the same default folder, because it's under 5 minutes old (`new_folder_timeout_min`)                                                                                   | the 2 tabs are closed; the rest identical                   |
-| E4  | Copy keeps tabs open                              | Alt-click "stash all"                                                                              | folder created; the original tabs are still visible and unmarked                                                                                                                              | identical                                                   |
-| E5  | Restore one bookmark reuses its hidden tab        | `given.stashedThreePages`; click a bookmark's `a.forest-title`                                     | the hidden tab is shown again (same tab id, not a new tab); its marker is removed; the bookmark remains                                                                                       | a new tab opens with that URL; the bookmark remains         |
-| E6  | Restore a folder                                  | click the folder's restore action                                                                  | all URLs are open and visible; an already-open URL is reused, not duplicated; the bookmarks remain; screenshot (time masked)                                                                  | new tabs open; the rest identical                           |
-| E7  | Restore and remove                                | click the folder's restore-and-remove action                                                       | tabs open; the folder is gone from "Tab Stash"; it is listed on `deleted-items.html`                                                                                                          | identical                                                   |
-| E8  | Delete a bookmark, then undo                      | click a bookmark's remove action, then the undo notification                                       | the bookmark disappears, then returns to its original folder (undo appends it at the end: upstream promises only "approximately the same place")                                              | identical                                                   |
-| E9  | Deleting a folder lists it in Deleted Items       | "Delete Group" in the folder menu                                                                  | the folder is gone from the stash; `deleted-items.html` lists it with its pages; screenshot (header date masked)                                                                              | identical                                                   |
-| E10 | Deleted items survive a background restart        | delete a folder; `restartBackground()`                                                             | `deleted-items.html` still lists it (IndexedDB persistence)                                                                                                                                   | identical, via a service-worker stop                        |
-| E11 | Rename a folder                                   | click the folder title, type, press Enter                                                          | the bookmark folder's title has changed                                                                                                                                                       | identical                                                   |
-| E12 | Stashing a duplicate URL moves it                 | seed a folder with URL X; stash a tab with URL X into it                                           | still exactly one bookmark for X                                                                                                                                                              | identical                                                   |
-| E13 | Search filters the stash                          | open `stash-list.html?q=<term>`                                                                    | only matching folders and bookmarks are shown; the others are hidden or marked `.no-match`; screenshot (seeded data)                                                                          | identical                                                   |
-| E14 | Removing a stashed bookmark closes its hidden tab | `given.stashedThreePages`; remove one bookmark with `browser.bookmarks.remove` (as in the Library) | the matching hidden tab is closed by the background's bookmark-removal listener (`src/index.ts`, `close_removed_bookmarks`). **Deferred:** fails on upstream (see below)                      | not applicable: whole spec is `browser: firefox`            |
-| E15 | Pinned tabs are left out of "Stash all"           | pin a tab (setup); stash all                                                                       | the pinned tab is skipped and stays open, pinned and visible                                                                                                                                  | identical                                                   |
-| E16 | Privileged URLs restore through the redirect page | seed a bookmark for `about:robots`; restore it                                                     | a tab opens at `restore.html?url=about%3Arobots`                                                                                                                                              | identical for `about:`; a `chrome:` URL would open directly |
-| E17 | Options persist                                   | select `#after_stashing_tab_close` on `options.html`; reload the page                              | the radio is still selected, and `storage.local` has the value                                                                                                                                | identical                                                   |
-| E18 | The popup view renders                            | open `stash-list.html?view=popup`                                                                  | renders with `html[data-view=popup]` and no errors; screenshot (seeded data)                                                                                                                  | identical                                                   |
-| E19 | Restore a folder from Deleted Items               | given a deleted folder; click Restore on it in `deleted-items.html`                                | the folder and its bookmarks are back; the entry is gone from Deleted Items                                                                                                                   | identical                                                   |
-| E20 | Pinned tabs are included when the option is on    | seed `stash_include_pinned: true`; pin a tab (setup); stash all                                    | all three tabs are stashed; the pinned tab is hidden and unpinned                                                                                                                             | the tabs are closed; the rest identical                     |
-| E21 | The sidebar view renders                          | open `stash-list.html?view=sidebar`                                                                | renders with `html[data-view=sidebar]` and no errors; screenshot (seeded data)                                                                                                                | not applicable: whole spec is `browser: firefox`            |
+| ID  | Scenario                                          | Action (page UI)                                                                                   | Assertions (Firefox)                                                                                                                                                                          | On Chrome                                                                   |
+| --- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| E1  | Extension installs and the stash list starts      | open `stash-list.html`                                                                             | `main.stash-list` renders; no errors (exists today)                                                                                                                                           | identical                                                                   |
+| E2  | Stash all open tabs                               | open 3 local pages; click "stash all" in the open-tabs toolbar                                     | a new `saved-…` folder at index 0 of "Tab Stash" with the 3 URLs in tab order; the 3 tabs are hidden with the `hidden_by_tab_stash` marker; one visible tab remains; screenshot (time masked) | the 3 tabs are closed; the rest identical                                   |
+| E3  | Stash one tab, twice                              | click "stash one" on two tab rows (scoped to the open-tabs list)                                   | both bookmarks land in the same default folder, because it's under 5 minutes old (`new_folder_timeout_min`)                                                                                   | the 2 tabs are closed; the rest identical                                   |
+| E4  | Copy keeps tabs open                              | Alt-click "stash all"                                                                              | folder created; the original tabs are still visible and unmarked                                                                                                                              | identical                                                                   |
+| E5  | Restore one bookmark reuses its hidden tab        | `given.stashedThreePages`; click a bookmark's `a.forest-title`                                     | the hidden tab is shown again (same tab id, not a new tab); its marker is removed; the bookmark remains                                                                                       | a new tab opens with that URL and becomes active; the bookmark remains      |
+| E6  | Restore a folder                                  | click the folder's restore action                                                                  | all URLs are open and visible; an already-open URL is reused, not duplicated; the bookmarks remain; screenshot (time masked)                                                                  | new tabs open; the rest identical                                           |
+| E7  | Restore and remove                                | click the folder's restore-and-remove action                                                       | tabs open; the folder is gone from "Tab Stash"; it is listed on `deleted-items.html`                                                                                                          | identical                                                                   |
+| E8  | Delete a bookmark, then undo                      | click a bookmark's remove action, then the undo notification                                       | the bookmark disappears, then returns to its original folder (undo appends it at the end: upstream promises only "approximately the same place")                                              | identical                                                                   |
+| E9  | Deleting a folder lists it in Deleted Items       | "Delete Group" in the folder menu                                                                  | the folder is gone from the stash; `deleted-items.html` lists it with its pages; screenshot (header date masked)                                                                              | identical                                                                   |
+| E10 | Deleted items survive a background restart        | delete a folder; `restartBackground()`                                                             | `deleted-items.html` still lists it (IndexedDB persistence)                                                                                                                                   | identical, via a service-worker stop                                        |
+| E11 | Rename a folder                                   | click the folder title, type, press Enter                                                          | the bookmark folder's title has changed                                                                                                                                                       | identical                                                                   |
+| E12 | Stashing a duplicate URL moves it                 | seed a folder with URL X; stash a tab with URL X into it                                           | still exactly one bookmark for X                                                                                                                                                              | identical                                                                   |
+| E13 | Search filters the stash                          | open `stash-list.html?q=<term>`                                                                    | only matching folders and bookmarks are shown; the others are hidden or marked `.no-match`; screenshot (seeded data)                                                                          | identical                                                                   |
+| E14 | Removing a stashed bookmark closes its hidden tab | `given.stashedThreePages`; remove one bookmark with `browser.bookmarks.remove` (as in the Library) | the matching hidden tab is closed by the background's bookmark-removal listener (`src/index.ts`, `close_removed_bookmarks`). **Deferred:** fails on upstream (see below)                      | not applicable: whole spec is `browser: firefox`                            |
+| E15 | Pinned tabs are left out of "Stash all"           | pin a tab (setup); stash all                                                                       | the pinned tab is skipped and stays open, pinned and visible                                                                                                                                  | identical                                                                   |
+| E16 | Privileged URLs restore through the redirect page | seed a bookmark for `about:robots`; restore it                                                     | a tab opens at `restore.html?url=about%3Arobots`                                                                                                                                              | Chrome stores `about:robots` as `chrome://robots/`, and that opens directly |
+| E17 | Options persist                                   | select `#after_stashing_tab_close` on `options.html`; reload the page                              | the radio is still selected, and `storage.local` has the value                                                                                                                                | identical                                                                   |
+| E18 | The popup view renders                            | open `stash-list.html?view=popup`                                                                  | renders with `html[data-view=popup]` and no errors; screenshot (seeded data)                                                                                                                  | identical                                                                   |
+| E19 | Restore a folder from Deleted Items               | given a deleted folder; click Restore on it in `deleted-items.html`                                | the folder and its bookmarks are back; the entry is gone from Deleted Items                                                                                                                   | identical                                                                   |
+| E20 | Pinned tabs are included when the option is on    | seed `stash_include_pinned: true`; pin a tab (setup); stash all                                    | all three tabs are stashed; the pinned tab is hidden and unpinned                                                                                                                             | the tabs are closed; the rest identical                                     |
+| E21 | The sidebar view renders                          | open `stash-list.html?view=sidebar`                                                                | renders with `html[data-view=sidebar]` and no errors; screenshot (seeded data)                                                                                                                | not applicable: whole spec is `browser: firefox`                            |
 
 Some scenarios act, check, and act again, e.g. delete a folder, see it listed, restore it. A spec runs every `given`, then every `when`, then every `then`, so such a scenario becomes two specs: E9 and E19, E15 and E20, E18 and E21. E17 checks persistence only, because showing the option's effect would need a second action.
 
@@ -294,51 +298,65 @@ Some scenarios act, check, and act again, e.g. delete a folder, see it listed, r
 bin/e2e test --browser=firefox                        # test this checkout
 bin/e2e test --browser=firefox --ref=622bf3d          # build 622bf3d, test that
 bin/e2e test --browser=firefox --ref=622bf3d --update-goldens   # regenerate goldens
-bin/e2e test --browser=chrome                         # the Chrome smoke test, for now
+bin/e2e test --browser=chrome                         # the same suite on Chrome
+bin/e2e test --browser=chrome --ref=bd2efa4 --update-goldens    # Chrome goldens
 bin/e2e help
 ```
 
 - **`--browser` is required.**
 - **`--ref=<commit>`** checks out and builds that commit (cached per commit), then runs _this_ checkout's tests against _that_ build. Any commit works: the pinned upstream one, an older commit of ours, or a branch.
 - **`--update-goldens`** requires `--ref`, so goldens can't be regenerated from uncommitted or branch changes by accident.
-- **Firefox only, for now.** Both flags apply to Firefox only, because upstream has no Chrome build.
+- **Both browsers.** Both flags work for Firefox and Chrome. Firefox's goldens come from upstream `622bf3d`. Upstream has no Chrome build that loads, so Chrome's goldens come from a pinned commit of this fork (`bd2efa4`).
 - **The Makefile targets stay the real logic,** so there's still one build system. `bin/e2e` only chooses among them.
 
 Before and after, in the Makefile:
 
-| Target              | Today                                         | After                                                                        |
-| ------------------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
-| `check-e2e`         | runs `check-e2e-chrome` + `check-e2e-firefox` | unchanged                                                                    |
-| `check-e2e-chrome`  | the Chrome smoke test                         | unchanged until RFC 0001 adds the Chrome adapter                             |
-| `check-e2e-firefox` | `e2e/firefox.test.cjs`                        | the runner self-test plus `e2e/tests/*/suite.cts`; the smoke test becomes E1 |
-| `check-e2e-ref`     | —                                             | new: the Firefox suite against the build of `E2E_REF`                        |
+| Target              | Today                                         | After                                                                                                  |
+| ------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `check-e2e`         | runs `check-e2e-chrome` + `check-e2e-firefox` | unchanged                                                                                              |
+| `check-e2e-chrome`  | the Chrome smoke test                         | the smoke test (`e2e/chrome.test.cjs`), then the suites with `E2E_BROWSER=chrome E2E_DIST=dist-chrome` |
+| `check-e2e-firefox` | `e2e/firefox.test.cjs`                        | the runner self-test plus `e2e/tests/*/suite.cts`; the smoke test becomes E1                           |
+| `check-e2e-ref`     | —                                             | new: the suite in `E2E_BROWSER` (default `firefox`) against that browser's build of `E2E_REF`          |
 
 ```make
+check-e2e-chrome: build-chrome-dbg
+	node --test e2e/chrome.test.cjs
+	TZ=UTC E2E_BROWSER=chrome E2E_DIST=dist-chrome node --test $(E2E_SPECS)
+
 E2E_DIST ?= dist
+# Narrows a run to some suites, e.g. E2E_SPECS='e2e/tests/e01-*/suite.cts'.
+E2E_SPECS ?= e2e/tests/*/suite.cts
 
 check-e2e-firefox: build-dbg
-	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts e2e/tests/*/suite.cts
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts $(E2E_SPECS)
 
-# Builds E2E_REF once and runs this checkout's suite against that build.  The
-# cache is keyed by the resolved commit hash (a branch name can't go stale),
-# lives in the bind-mounted repo so it survives between containers, and only
-# counts once .e2e-built exists, so an interrupted build is redone.
+# Builds E2E_REF once per build target and runs this checkout's tests against
+# that build in E2E_BROWSER (see the Makefile for the full comment).
+E2E_BROWSER ?= firefox
+
 check-e2e-ref:
 	@test -n "$(E2E_REF)" || { echo "Set E2E_REF=<commit>" >&2; exit 1; }
-	@sha="$$(git rev-parse --verify --quiet "$(E2E_REF)^{commit}")" || { \
+	@case "$(E2E_BROWSER)" in \
+	  firefox) build=build-dbg; out=dist ;; \
+	  chrome) build=build-chrome-dbg; out=dist-chrome ;; \
+	  *) echo "E2E_BROWSER must be firefox or chrome" >&2; exit 1 ;; \
+	esac; \
+	sha="$$(git rev-parse --verify --quiet "$(E2E_REF)^{commit}")" || { \
 	  echo "E2E_REF does not resolve to a commit: $(E2E_REF)" >&2; exit 1; }; \
 	dir="node_modules/.cache/e2e-ref/$$sha"; \
-	test -e "$$dir/.e2e-built" || ( \
-	  rm -rf "$$dir" && git clone --quiet . "$$dir" && \
+	test -e "$$dir/.e2e-built-$$build" || ( \
+	  { test -d "$$dir/.git" || { rm -rf "$$dir" && git clone --quiet . "$$dir"; }; } && \
 	  git -C "$$dir" checkout --quiet "$$sha" && \
-	  $(MAKE) -C "$$dir" build-dbg && touch "$$dir/.e2e-built" ) && \
-	TZ=UTC E2E_BROWSER=firefox E2E_DIST="$$dir/dist" node --test e2e/tests/*/suite.cts
+	  $(MAKE) -C "$$dir" $$build && \
+	  touch "$$dir/.e2e-built-$$build" ) && \
+	TZ=UTC E2E_BROWSER=$(E2E_BROWSER) E2E_DIST="$$dir/$$out" node --test $(E2E_SPECS)
 ```
 
-- **The reference build is cached** per commit hash, with a completion marker. `node_modules/` is gitignored, so Prettier and git ignore the cached clone. The first build of a commit takes a few minutes (`npm clean-install`); later runs reuse it.
+- **The reference build is cached** per commit hash, with a completion marker per build target, so a commit's Firefox and Chrome builds share one clone. `node_modules/` is gitignored, so Prettier and git ignore the cached clone. The first build of a commit takes a few minutes (`npm clean-install`); later runs reuse it.
 - **Golden screenshots:** `bin/e2e test --browser=firefox --ref=622bf3d --update-goldens` writes them from the baseline build (it sets `UPDATE_SCREENSHOTS=1`). Our branch must then match them.
   - A branch that changes Firefox's UI on purpose regenerates the affected goldens in the same PR, and the reviewer approves the image diff.
   - Nothing in RFC 0001 should change Firefox's UI, so for now the goldens are always the baseline's.
+  - Chrome's goldens live under `screenshots/chrome/` and come from `bin/e2e test --browser=chrome --ref=bd2efa4 --update-goldens`, since upstream has no Chrome build to take them from.
 - **A test is accepted only if:**
   - it passes against the baseline (`--ref=622bf3d`), and the whole suite then passes three consecutive runs;
   - it passes against our branch (no Firefox regression);
@@ -478,7 +496,7 @@ Recorded on 2026-10-14 at commit `07bce90`.
   - **`when` steps wait only for what they need,** and each `then` step waits for its own outcome, so a mutation fails the step it's about.
   - **Several planned mutations were no-ops or unreachable** and were replaced; each spec's notes give the edit that was actually verified.
 
-**After this RFC.** RFC 0001 adds the Chrome adapter, runs the specs with `browser: chrome` steps, and records a parity table. If a core scenario fails on Chrome in a way that needs architectural change, that becomes a further Chrome RFC, as RFC 0001's Rollout says.
+**After this RFC.** RFC 0001 added the Chrome adapter, ran the specs with `browser: chrome` steps, and recorded a parity table in its "Phase 3 parity results": every spec that applies to Chrome passes, and nothing needed architectural change.
 
 **Rollback:** the suite is additive and fork-only. Removing `e2e/tests/`, `e2e/harness/`, `bin/e2e` and the target changes undoes it. The smoke test can be restored from git.
 
@@ -522,3 +540,4 @@ Recorded on 2026-10-14 at commit `07bce90`.
 ## History
 
 - 2026-10-13 — draft
+- 2026-10-14 — Chrome adapter built (RFC 0001 Phase 3)
