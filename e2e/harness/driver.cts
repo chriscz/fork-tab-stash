@@ -70,9 +70,31 @@ class Driver {
     return this.pageUrls(n)[n - 1];
   }
 
-  async open(page: string): Promise<void> {
+  // Opens one of Tab Stash's pages in the test's tab and waits until it has
+  // started: every page sets globalThis.app once its model has loaded, just
+  // before it mounts its UI.  A page keeps calling browser.* APIs while it
+  // starts, and navigating away first (a reload in seed(), another open())
+  // leaves those calls pending; Firefox then logs "Promise resolved after
+  // context unloaded" when they settle.  The whole open, navigation included,
+  // is bounded by `timeout`.
+  async open(page: string, timeout = TIMEOUT_MS): Promise<void> {
     this.page = page;
-    await this.adapter.open(page);
+    const end = Date.now() + timeout;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      this.adapter.open(page),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Timed out opening ${page}`)),
+          timeout,
+        );
+      }),
+    ]).finally(() => clearTimeout(timer));
+    await this.waitFor(
+      `!!globalThis.app`,
+      `${page} to start`,
+      end - Date.now(),
+    );
   }
 
   eval(js: string): Promise<any> {
@@ -399,12 +421,8 @@ class Driver {
     await this.adapter.restartBackground();
     await this.waitUntil(async () => {
       try {
-        await this.open(this.page);
-        return await this.waitFor(
-          `!!globalThis.the?.model`,
-          "the page to start up",
-          5000,
-        );
+        await this.open(this.page, 5000);
+        return true;
       } catch {
         return false;
       }

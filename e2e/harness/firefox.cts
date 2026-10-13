@@ -149,6 +149,7 @@ async function launchAdapter({dist}: {dist: string}) {
           const {AddonManager} = ChromeUtils.importESModule(
             "resource://gre/modules/AddonManager.sys.mjs");
           const addon = await AddonManager.getAddonByID(${JSON.stringify(ADDON_ID)});
+          if (!addon) throw new Error(${JSON.stringify(`Add-on ${ADDON_ID} is not installed`)});
           await addon.reload();
           return true;
         })()`,
