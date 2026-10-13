@@ -317,8 +317,12 @@ class Driver {
 
   // Picks `label` from Tab Stash's items in the context menu of the tab
   // showing `url`, as the user would by right-clicking the tab.  Firefox only.
-  clickTabMenuItem(url: string, label: string): Promise<void> {
-    return this.adapter.clickTabMenuItem(url, label);
+  clickTabMenuItem(
+    url: string,
+    label: string,
+    timeout = TIMEOUT_MS,
+  ): Promise<void> {
+    return this.adapter.clickTabMenuItem(url, label, timeout);
   }
 
   // Closes the browser's sidebar, as the user would with its close button.

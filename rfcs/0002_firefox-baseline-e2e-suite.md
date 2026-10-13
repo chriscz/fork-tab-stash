@@ -286,7 +286,7 @@ Some scenarios act, check, and act again, e.g. delete a folder, see it listed, r
   - pinning a tab in a `given` step (E15, E20), as the user would from the tab's menu;
   - seeding a bookmark with a custom URL (E16);
   - opening pages with `openPages()` in a `given` step, as the user would open tabs;
-  - bringing the test's tab forward with `activate()`, as the user would by clicking it.
+  - bringing the test's tab forward with `activate()`, as the user would by clicking it;
   - closing the sidebar with `closeSidebar()` in a `given` step (E23), as the user would with its close button.
 - **Don't call `the.model` to perform an action.** That tests internals. The one allowed use is waiting for it to load.
 - **Never call BiDi, CDP or browser internals from a suite.** Missing capabilities go into the adapters and the driver, once.

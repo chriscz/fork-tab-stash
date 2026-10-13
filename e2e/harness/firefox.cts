@@ -133,7 +133,9 @@ async function launchAdapter({dist}: {dist: string}) {
     // menu, opening the submenu Firefox groups an add-on's items into.  The
     // menu is the browser's own, so the item must really be there, and the
     // add-on gets menus.onClicked as user input, as it does from a real click.
-    async clickTabMenuItem(url: string, label: string) {
+    // Each wait for a menu to open or close gives up after `timeout` ms, and
+    // a failure closes the menu so it doesn't stay open for later steps.
+    async clickTabMenuItem(url: string, label: string, timeout: number) {
       await evaluateIn(
         await chromeContext(),
         `(async () => {
@@ -141,27 +143,38 @@ async function launchAdapter({dist}: {dist: string}) {
           const tab = gBrowser.tabs.find(t => t.linkedBrowser.currentURI.spec === url);
           if (!tab) throw new Error("No tab shows " + url);
           const menu = document.getElementById("tabContextMenu");
-          const shown = (popup) =>
-            new Promise(r => popup.addEventListener("popupshown", r, {once: true}));
-          const opened = shown(menu);
-          menu.openPopup(tab, "after_start", 0, 0, true, false, null);
-          await opened;
-          const items = [...menu.querySelectorAll("menuitem")];
-          const item = items.find(m => m.getAttribute("label") === label);
-          if (!item) {
-            menu.hidePopup();
-            throw new Error("No menu item " + JSON.stringify(label) + " in the tab's context menu, only "
-              + JSON.stringify(items.filter(m => !m.hidden).map(m => m.getAttribute("label"))));
+          const event = (popup, type, what) => {
+            let timer;
+            return Promise.race([
+              new Promise(r => popup.addEventListener(type, r, {once: true})),
+              new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error(what)), ${timeout});
+              }),
+            ]).finally(() => clearTimeout(timer));
+          };
+          try {
+            const opened = event(menu, "popupshown", "The tab menu didn't open");
+            menu.openPopup(tab, "after_start", 0, 0, true, false, null);
+            await opened;
+            const items = [...menu.querySelectorAll("menuitem")]
+              .filter(m => !m.hidden && !m.disabled && m.hasAttribute("label"));
+            const item = items.find(m => m.getAttribute("label") === label);
+            if (!item) {
+              throw new Error("No menu item " + JSON.stringify(label) + " in the tab's context menu, only "
+                + JSON.stringify(items.map(m => m.getAttribute("label"))));
+            }
+            const popup = item.parentElement;
+            if (popup !== menu) {
+              const subOpened = event(popup, "popupshown", "The tab menu's submenu didn't open");
+              popup.parentElement.openMenu(true);
+              await subOpened;
+            }
+            const closed = event(menu, "popuphidden", "The tab menu didn't close");
+            popup.activateItem(item);
+            await closed;
+          } finally {
+            if (menu.state !== "closed") menu.hidePopup();
           }
-          const popup = item.parentElement;
-          if (popup !== menu) {
-            const subOpened = shown(popup);
-            popup.parentElement.openMenu(true);
-            await subOpened;
-          }
-          const closed = new Promise(r => menu.addEventListener("popuphidden", r, {once: true}));
-          popup.activateItem(item);
-          await closed;
         })()`,
       );
     },

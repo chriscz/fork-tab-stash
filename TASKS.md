@@ -124,14 +124,16 @@ None.
 
 ### Showing the popup also opens the sidebar
 
-- **Where:** `src/index.ts`, the `"popup"` case of `show_something()`.
+- **Where:** `src/index.ts`, the `"popup"` case of `show_something()`
+  (`src/index.ts:295`).
 - **What:** the case had no `break`, so after `commands.show_popup` it fell
   through to `case "sidebar"` and also ran `commands.show_sidebar_or_tab`.
 - **Effect:** wherever `show_something("popup")` runs, Firefox shows the popup
   and opens the sidebar. Chrome has no sidebar, so by reading it opens a
-  stash-list tab instead. It runs for a menu command when `open_stash_in` is `"popup"`,
-  and for a toolbar click when `browser_action_show` is `"popup"` but the
-  button has no popup set. No release offers `"popup"` for `open_stash_in`
+  stash-list tab instead. It runs for a menu command, or a click on the
+  address bar's page action (which runs the same `stash_one` command), when
+  `open_stash_in` is `"popup"`, and for a toolbar click when
+  `browser_action_show` is `"popup"` but the button has no popup set. No release offers `"popup"` for `open_stash_in`
   (only development builds between `1e578cd` and `9a8922a`, February 2021),
   but the model still honours a stored value. The button loses its popup
   because `show_popup` clears it after opening the popup, so once a command
