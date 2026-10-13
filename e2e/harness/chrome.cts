@@ -10,8 +10,19 @@ async function launchAdapter({dist}: {dist: string}) {
     headless: true, // new headless; the old one can't load extensions
     pipe: true, // loading unpacked extensions goes over the CDP pipe
     enableExtensions: true,
-    // The container has no user namespaces for the sandbox and a small /dev/shm
-    args: ["--no-sandbox", "--disable-dev-shm-usage", "--lang=en-US"],
+    // The container has no user namespaces for the sandbox and a small
+    // /dev/shm.  Golden screenshots are compared byte for byte, so every run
+    // must rasterise the page the same way.  Without
+    // --disable-partial-raster, which makes Chrome redraw whole tiles rather
+    // than only their changed parts, anti-aliased edges and text differed by
+    // a few colour levels between runs.  Other raster and GPU flags made no
+    // difference.
+    args: [
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--lang=en-US",
+      "--disable-partial-raster",
+    ],
     env: {...process.env, LANG: "en_US.UTF-8", LANGUAGE: "en_US"},
   });
 
