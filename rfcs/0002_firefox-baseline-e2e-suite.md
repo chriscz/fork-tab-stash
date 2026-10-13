@@ -397,6 +397,25 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
 - **Fallback for E10:** if `restartBackground()` can't be made reliable on Firefox (Open question 2), E10 is dropped from this RFC and noted in `TASKS.md`.
 - **Exit criteria:** the same as Phase A, and the whole suite's test time is under five minutes.
 
+### Phase A results
+
+Recorded on 2026-10-13 at commit `d1aa9a0`.
+
+- **Baseline:** `bin/e2e test --browser=firefox --ref=622bf3d` passed three consecutive runs, 19/19 checks each (E01, E02, E08 and their steps).
+- **Our branch:** `bin/e2e test --browser=firefox` passed three consecutive runs, 28/28 each, including the runner's 9 self-tests.
+- **Screenshots:** E02's golden, generated from `622bf3d`, matched byte for byte in six runs (three per build) during Task 5, and in all six exit runs.
+- **Mutation checks**, each failing the expected step:
+  - E01: deleting `dist/stash-list.js` fails "The stash list renders."
+  - E02: an early return in `hide()` (`src/model/tabs.ts`) fails "The three tabs are hidden and marked as hidden by Tab Stash."
+  - E08: removing `@activate="onDeleteNotifActivated"` (`src/stash-list/index.vue:40`) fails the restore step.
+- **Neutral suites:** `grep -rE "connection\.send|Services\.|gBrowser" e2e/tests` finds nothing.
+- **Speed:** test time was 8.0–8.6 s per run. `node --test` runs each spec file in its own process, concurrently, so the three specs took about as long as the slowest one. Even run one at a time, at roughly 3 s per spec (Firefox start, install, steps), 18 specs come to about a minute, well inside the five-minute budget.
+- **What Phase A changed in the design:**
+  - **The clock pins only `new Date()`.** Freezing `Date.now()` deadlocked Tab Stash's 20 ms wait when it creates the stash folder.
+  - **The driver waits before seeding.** It waits for the background to record its version, because a fresh install rewrites the local options.
+  - **E8 checks the folder, not the position.** Undo appends the bookmark to its folder (`622bf3d` does too).
+  - **The reference build is cached per commit hash,** with a completion marker.
+
 **After this RFC.** RFC 0001 adds the Chrome adapter, runs the specs with `browser: chrome` steps, and records a parity table. If a core scenario fails on Chrome in a way that needs architectural change, that becomes a further Chrome RFC, as RFC 0001's Rollout says.
 
 **Rollback:** the suite is additive and fork-only. Removing `e2e/tests/`, `e2e/harness/`, `bin/e2e` and the target changes undoes it. The smoke test can be restored from git.
@@ -430,7 +449,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
 
 ## Open questions
 
-1. **Can the Firefox adapter freeze `Date` before an extension page first renders?** Firefox runs no preload scripts in extension pages. Options are navigating with `wait: "none"` and installing the clock immediately, or installing it from the chrome context. If neither works, specs drop screenshots of views with generated times. _Resolve in Phase A._
+1. **Can the Firefox adapter pin the date before an extension page first renders?** _Narrowed in Phase A._ Pinning after load is enough when the page creates the dated item after load, which was E02's case. It is not enough for Deleted Items (E9): its stored times come from `new Date()` and so are pinned, but its day headers are computed at first render. E9 therefore needs either a pin before render or a re-render after pinning. _Resolve in Phase B_, or drop E9's screenshot.
 2. **Can the Firefox adapter restart the background reliably?** That's needed for E10: `browser.runtime.reload()` from a page under BiDi's temporary install, or a reinstall that keeps the profile. _Resolve in Phase C_, with the E10 fallback.
 3. **Should the suite add `data-test` attributes upstream to make selectors less fragile?** _Defer_ until selector breakage is a real cost, since it touches upstream UI code.
 4. **Do synthetic `MouseEvent`s with `altKey` reach the Vue handlers the same way real clicks do (E4)?** _Resolve in Phase B_, with the mutation check.
