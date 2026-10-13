@@ -64,7 +64,7 @@ check-e2e-chrome: build-chrome-dbg
 E2E_DIST ?= dist
 
 check-e2e-firefox: build-dbg
-	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts e2e/firefox.test.cjs
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts e2e/tests/*/suite.cts
 .PHONY: check-e2e-firefox
 
 # Builds E2E_REF once (cached per resolved commit, inside the bind-mounted repo
@@ -84,7 +84,7 @@ check-e2e-ref:
 	  git -C "$$dir" checkout --quiet "$$sha" && \
 	  $(MAKE) -C "$$dir" build-dbg && \
 	  touch "$$dir/.e2e-built" ) && \
-	TZ=UTC E2E_BROWSER=firefox E2E_DIST="$$dir/dist" node --test e2e/firefox.test.cjs
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST="$$dir/dist" node --test e2e/tests/*/suite.cts
 .PHONY: check-e2e-ref
 
 fix-style: node_modules

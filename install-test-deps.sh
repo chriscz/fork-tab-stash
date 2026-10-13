@@ -44,5 +44,5 @@ sudo chmod -R a+rX "$CACHE_DIR"
 
 set +ex
 echo
-echo ">>> All done!  Run the end-to-end tests with: bin/dev run make check-e2e"
+echo ">>> All done!  Run the end-to-end tests with: bin/e2e test --browser=firefox"
 echo
