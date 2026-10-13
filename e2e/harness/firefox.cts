@@ -129,6 +129,55 @@ async function launchAdapter({dist}: {dist: string}) {
       );
     },
 
+    // Right-clicks the tab showing `url` and picks `label` from the context
+    // menu, opening the submenu Firefox groups an add-on's items into.  The
+    // menu is the browser's own, so the item must really be there, and the
+    // add-on gets menus.onClicked as user input, as it does from a real click.
+    async clickTabMenuItem(url: string, label: string) {
+      await evaluateIn(
+        await chromeContext(),
+        `(async () => {
+          const url = ${JSON.stringify(url)}, label = ${JSON.stringify(label)};
+          const tab = gBrowser.tabs.find(t => t.linkedBrowser.currentURI.spec === url);
+          if (!tab) throw new Error("No tab shows " + url);
+          const menu = document.getElementById("tabContextMenu");
+          const shown = (popup) =>
+            new Promise(r => popup.addEventListener("popupshown", r, {once: true}));
+          const opened = shown(menu);
+          menu.openPopup(tab, "after_start", 0, 0, true, false, null);
+          await opened;
+          const items = [...menu.querySelectorAll("menuitem")];
+          const item = items.find(m => m.getAttribute("label") === label);
+          if (!item) {
+            menu.hidePopup();
+            throw new Error("No menu item " + JSON.stringify(label) + " in the tab's context menu, only "
+              + JSON.stringify(items.filter(m => !m.hidden).map(m => m.getAttribute("label"))));
+          }
+          const popup = item.parentElement;
+          if (popup !== menu) {
+            const subOpened = shown(popup);
+            popup.parentElement.openMenu(true);
+            await subOpened;
+          }
+          const closed = new Promise(r => menu.addEventListener("popuphidden", r, {once: true}));
+          popup.activateItem(item);
+          await closed;
+        })()`,
+      );
+    },
+
+    // Closes the sidebar, as its close button does.  Firefox opens an
+    // add-on's sidebar when it is installed.
+    async closeSidebar() {
+      await evaluateIn(
+        await chromeContext(),
+        `(() => {
+          SidebarController.hide();
+          if (SidebarController.isOpen) throw new Error("The sidebar didn't close");
+        })()`,
+      );
+    },
+
     // Restarts the extension's background by reloading the add-on, which
     // keeps the profile and so its storage and IndexedDB.  Firefox closes an
     // add-on's tabs when it unloads, and closing the only tab would close the

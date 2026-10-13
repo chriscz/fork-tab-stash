@@ -115,6 +115,15 @@ async function launchAdapter({dist}: {dist: string}) {
       return [...errors];
     },
 
+    // Chrome has no tab context menu for extensions, and no way to open the
+    // page's context menu over CDP.
+    async clickTabMenuItem() {
+      throw new Error("Chrome has no tab context menu for extensions");
+    },
+
+    // Chrome has no sidebar, so there is nothing to close.
+    async closeSidebar() {},
+
     // Stops the extension's service worker, as Chrome does when it is idle.
     // The test's tab leaves the extension first, so no open page wakes the
     // worker straight back up; the driver reopens the page, which wakes it.

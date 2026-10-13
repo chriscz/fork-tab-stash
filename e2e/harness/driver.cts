@@ -315,6 +315,33 @@ class Driver {
       : false`);
   }
 
+  // Picks `label` from Tab Stash's items in the context menu of the tab
+  // showing `url`, as the user would by right-clicking the tab.  Firefox only.
+  clickTabMenuItem(url: string, label: string): Promise<void> {
+    return this.adapter.clickTabMenuItem(url, label);
+  }
+
+  // Closes the browser's sidebar, as the user would with its close button.
+  // Browsers without one (Chrome) have nothing to close.
+  closeSidebar(): Promise<void> {
+    return this.adapter.closeSidebar();
+  }
+
+  // URLs of Tab Stash's popups that are showing and have started, so a
+  // popup whose page failed to load doesn't count.
+  popups(): Promise<string[]> {
+    return this.eval(`browser.extension.getViews({type: "popup"})
+      .filter(w => !!w.app).map(w => w.location.href)`);
+  }
+
+  // Whether Tab Stash's sidebar is open in the page's window.  Browsers
+  // without a sidebar (Chrome) never have it open.
+  sidebarOpen(): Promise<boolean> {
+    return this.eval(
+      `browser.sidebarAction ? browser.sidebarAction.isOpen({}) : false`,
+    );
+  }
+
   // Sets options and stash folders, then reloads the current page so it starts
   // from that state.  Options merge into the defaults set at launch.
   async seed(
