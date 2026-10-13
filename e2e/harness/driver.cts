@@ -355,6 +355,17 @@ class Driver {
     await this.eval(`window.scrollTo(0, 0)`);
   }
 
+  // Titles of the stash's folders and bookmarks that are rendered and visible,
+  // top to bottom.  The open-tabs section is the separate ul.forest.one-column,
+  // so it is left out; a folder that only holds a search match is dimmed
+  // (.no-match) but still counts as shown.
+  visibleStashTitles(): Promise<string[]> {
+    return this
+      .eval(`[...document.querySelectorAll("ul.forest:not(.one-column) .forest-item")]
+      .filter(e => e.offsetParent !== null)
+      .map(e => e.querySelector(".forest-title")?.textContent.trim())`);
+  }
+
   // A PNG of the visible page, after a short settle so animations finish.
   // Masks black out parts that change from run to run, like the dates and
   // times Tab Stash shows, so the image still matches its golden byte for

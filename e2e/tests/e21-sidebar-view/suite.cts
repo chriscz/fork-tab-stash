@@ -1,12 +1,6 @@
 const assert = require("node:assert/strict");
 const {steps} = require("../../harness/runner.cts");
 
-// Titles of the stash's folders and bookmarks that are rendered and visible;
-// the open-tabs section is the separate ul.forest.one-column.
-const visibleTitles = `[...document.querySelectorAll("ul.forest:not(.one-column) .forest-item")]
-  .filter(e => e.offsetParent !== null)
-  .map(e => e.querySelector(".forest-title")?.textContent.trim())`;
-
 steps(__dirname, {
   'The stash has a folder "Reading" with Page 1 and Page 2.': async h => {
     await h.seed({stash: [{title: "Reading", pages: [1, 2]}]});
@@ -35,7 +29,7 @@ steps(__dirname, {
     await h.showAllFolders();
     await h.waitUntil(
       async () =>
-        JSON.stringify(await h.eval(visibleTitles)) ===
+        JSON.stringify(await h.visibleStashTitles()) ===
         JSON.stringify(["Reading", "Page 1", "Page 2"]),
       "Reading and its two pages to show",
     );
