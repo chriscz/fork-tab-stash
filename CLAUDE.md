@@ -5,72 +5,45 @@ contributions and the `Co-Authored-By:` line on every AI-assisted commit and PR.
 
 ## Maintainer preferences
 
-These come from @josh-berry's comments on the Chrome port issue
-([#52](https://github.com/josh-berry/tab-stash/issues/52), 2020–2026) and
-his review of the closed Chrome MV3 PR
-([#711](https://github.com/josh-berry/tab-stash/pull/711), July 2026).
+How @josh-berry likes changes to be made, from his comments on
+[#52](https://github.com/josh-berry/tab-stash/issues/52) and his review of
+[#711](https://github.com/josh-berry/tab-stash/pull/711). His views on the
+Chrome port itself are in
+[rfcs/0001_chrome-mv3-separate-manifest.d/maintainer-views.md](rfcs/0001_chrome-mv3-separate-manifest.d/maintainer-views.md).
 
-### Chrome support, in his words (#52)
+Changes should be minimally intrusive and build on what is already there.
 
-- **The real barrier is popups, not MV3 or the sidebar.** In Chrome, a popup
-  closes as soon as the active tab changes, which stops any operation still
-  running in it (e.g. "stash all open tabs"). Reliable Chrome support means
-  moving all tab, window and bookmark changes out of the UI into the
-  background, through new NanoServices and refactored models. He calls this
-  "the single biggest barrier" and doesn't think LLMs can do this kind of
-  "subtle, far-reaching" rework.
-- **He wants the popup view kept.** Dropping it would lower the technical bar,
-  but he sees the choice of UI views as part of what makes Tab Stash special.
-- **He prefers small, independent PRs towards Chrome compatibility.** Examples
-  he gave: moving to Manifest V3, making `browser.*` usage work on both
-  browsers, and small cross-browser fixes such as styling or layout. Frame
-  work as one of these steps, not as "Chrome support".
-- **Test thoroughly before sending a PR.** He warns that MV3 has "subtle
-  differences that could cause unpredictable breakage".
-- **Check for semantic differences between the browsers' APIs** (bookmarks in
-  particular), and check that the UI renders correctly in Chrome on Windows,
-  macOS and Linux.
-- **A full port is an ongoing commitment.** He'll merge it, help, and handle
-  publishing only if someone commits to maintaining it and works closely with
-  him from the start. He is a Firefox user and doesn't run Chrome day to day.
 - **A human must own every PR.** Even when AI helped, he wants a person to
   sign off that the work is theirs, that they reviewed and tested it, and that
   they'll put their name on it (in the spirit of the Developer Certificate of
   Origin). He has raised ethical and copyright concerns about LLM-written code.
   By July 2026 he was "willing to try [AI contributions] as an experiment",
   under the rules in `AGENTS.md`.
-
-### How he reviews changes (#711)
-
-Changes should be minimally intrusive and build on what is already there.
-
-- **Reuse what exists before adding anything.** The codebase already has
-  Chrome-friendly code, including a Chrome build. Find it and extend it. Don't
-  build a parallel path.
-- **Generate derived files rather than duplicating them.** He wants the Chrome
-  manifest generated from `assets/manifest.json` by a small Node script that
-  reads, mutates and emits the JSON, as `patch-manifest-for-chrome.js` does.
-  Permission changes should carry over to Chrome without anyone remembering
-  to update a second file.
+- **Prefer small, independent PRs** that each take one step, over one large
+  change.
+- **Test thoroughly before sending a PR.**
+- **Reuse what exists before adding anything.** Find the existing code that
+  does something similar and extend it. Don't build a parallel path.
+- **Generate derived files rather than duplicating them**, so a change to the
+  source carries over without anyone remembering to update a second file.
 - **One build system.** Use and tweak the `Makefile`. Don't add separate build
   scripts or systems.
 - **Use the existing helpers and model logic.**
   - Open tabs through `restoreTabs()`; it handles empty tabs and picking the
     target window. If it needs another option, add one.
   - Reuse existing feature checks and helpers instead of re-checking inline.
-  - Extend existing Chrome-specific branches, such as tab opening in
-    `src/model/tabs.ts`, rather than adding new ones. Keep the
-    `_loading_queue` protection.
-  - Rely on the existing privileged-URL handling rather than blocking URLs.
+  - Extend existing browser-specific branches rather than adding new ones.
+  - Rely on existing handling (e.g. for privileged URLs) rather than blocking
+    things outright.
   - If something underneath is wrong, fix it at the source instead of working
     around it in the caller.
 - **No `<any>` casts.** If types are missing, update `webextension-polyfill`'s
   types instead.
-- **Don't weaken safety for portability.** He is wary of skipping
-  `navigator.storage.persist()`, because saved deleted items could be lost.
-  Any change like this needs evidence that the data stays safe.
-- **Keep diagnostics.** Don't remove warnings, such as unknown-tab events,
-  just because one browser triggers them more often.
+- **Don't weaken safety for portability.** Any change that could lose user
+  data (e.g. skipping `navigator.storage.persist()`) needs evidence that the
+  data stays safe.
+- **Keep diagnostics.** Don't remove warnings just because one browser
+  triggers them more often.
 - **Don't duplicate docs.** Check that the README doesn't already say it.
 - **Expect to address review comments.** He closes PRs that go stale without
   responses to his review.
