@@ -93,9 +93,9 @@ We propose three changes:
 2. Make the shared background tolerate restarts. On Firefox this is a refactor with no visible change.
 3. Add Chrome-only code paths that are inert on Firefox.
 
-### 1. A separate Chrome manifest: `assets/manifest-chrome.json`
+### 1. A separate Chrome manifest: `manifest-chrome.json`
 
-This new file replaces `patch-manifest-for-chrome.js`. It is a complete, hand-maintained MV3 manifest:
+This new file replaces `patch-manifest-for-chrome.js`. It is a complete, hand-maintained MV3 manifest. It lives at the repository root, next to the build script, and not in `assets/`: the build copies all of `assets/**` into the Firefox package. The sketch below uses comments for explanation; the real file is plain JSON.
 
 ```jsonc
 {
@@ -146,67 +146,72 @@ Compared with today's patched output:
 
 **The background bundle needs no format change.** Vite already emits `src/index.ts` as one self-contained file: the built `dist/index.js` contains no `import` or `export` statements and no dynamic imports. It therefore runs as a classic worker script.
 
-**The version has one source of truth.** `assets/manifest.json` stays the only place the version is set. The Chrome build copies `manifest-chrome.json` and overwrites its `version` field with Firefox's. That is a two-line Node script, `stamp-chrome-manifest.js`, replacing the 26-line patch script.
+**The version has one source of truth.** `assets/manifest.json` stays the only place the version is set. A short Node script, `build-chrome-manifest.js`, replaces the 26-line patch script. It:
+
+- reads `manifest-chrome.json`;
+- overwrites its `version` with Firefox's;
+- fails if any file the manifest references is missing from the output directory;
+- writes the result to `dist-chrome/manifest.json`.
 
 **Makefile changes:**
 
-- `build-chrome-dbg` uses `stamp-chrome-manifest.js` in place of `patch-manifest-for-chrome.js`.
+- `build-chrome-dbg` runs `build-chrome-manifest.js` in place of `patch-manifest-for-chrome.js`.
 - A new `build-chrome-rel` target does the same for release builds.
 - A new `pkg-chrome` target zips the release build into `releases/tab-stash-chrome-X.XX.zip`.
-- A new `check-chrome-manifest` target fails if any file the Chrome manifest references is missing from `dist-chrome/`.
 - `rel` stays Firefox-only until the maintainer decides to ship Chrome.
 
 ### 2. A shared background that tolerates restarts
 
 These changes apply to both builds. On Firefox they must not change visible behaviour.
 
-**a. Register every waking listener synchronously, and keep handlers synchronous when the model is loaded.** Firefox only lets the extension open the sidebar or a popup before the handler's first `await` (`src/index.ts:159-161`, `:244-246`, `:323-327`). Today every handler runs with the model already loaded and calls `show_something()` synchronously. We keep that path exactly and add an async path for cold starts:
+**a. Register every waking listener synchronously, and attach its handler when the model has loaded.** Firefox only lets the extension open the sidebar or a popup before the handler's first `await` (`src/index.ts:159-161`, `:244-246`, `:323-327`). Today every handler runs with the model already loaded and calls `show_something()` synchronously. A small helper, `deferredListener`, keeps that path exactly:
+
+- **It registers at load time.** It adds a listener to the browser event as soon as `src/index.ts` loads.
+- **It queues early events.** Events that arrive before a handler is attached are queued and replayed, in order, when the handler is attached.
+- **It delivers synchronously afterwards.** Once the handler is attached, events go straight to it, in the same turn.
 
 ```ts
-// src/index.ts (sketch)
-let loaded: Model | undefined; // set when the model finishes loading
-let loading: Promise<Model> | undefined;
-function model(): Promise<Model> {
-  loading ??= service_model().then(
-    m => (loaded = m),
-    e => {
-      loading = undefined;
-      throw e;
-    }, // let the next event retry
-  );
-  return loading;
-}
-void model(); // start loading immediately, as today
-
-/** Runs `fn` synchronously if the model is loaded (always true on Firefox
- * after startup, preserving gesture rules), else after it loads (Chrome cold
- * wake, where there is no sidebar to open). */
-function withModel<A extends unknown[]>(fn: (m: Model, ...a: A) => unknown) {
-  return (...a: A) =>
-    loaded
-      ? fn(loaded, ...a)
-      : model()
-          .then(m => fn(m, ...a))
-          .catch(console.log);
+// src/util/index.ts
+export function deferredListener<L extends (...args: any[]) => any>(event: {
+  addListener(l: L): void;
+}): {handle(l: L): void} {
+  let handler: L | undefined;
+  const queued: Parameters<L>[] = [];
+  event.addListener(((...args: Parameters<L>) => {
+    if (handler) handler(...args);
+    else queued.push(args);
+  }) as L);
+  return {
+    handle(l: L) {
+      handler = l;
+      for (const args of queued.splice(0)) l(...args);
+    },
+  };
 }
 
-browser.contextMenus.onClicked.addListener(
-  withModel((m, info, tab) => {
-    const cmd = (<string>info.menuItemId).replace(/^[^:]*:/, ""); // as today
-    const t = tab?.id ? m.tabs.tab(tab.id) : undefined;
-    commands[cmd](t).catch(console.log); // commands close over `loaded`
-  }),
-);
+// src/index.ts, at top level, before the model loads
+const onMenuClicked = deferredListener(browser.contextMenus.onClicked);
+
+// ...later, inside the existing async block, once `model` exists:
+onMenuClicked.handle((info, tab) => {
+  /* unchanged handler body */
+});
 ```
 
-The toolbar button handler, `pageAction.onClicked` and `alarms.onAlarm` follow the same pattern. On Firefox, a click arriving during the first second of startup used to find no listener at all. Now it waits for the model, so startup behaviour is no worse than before.
+The handler bodies in `src/index.ts` stay as they are. Only the registration call changes. The toolbar button, `pageAction.onClicked`, `alarms.onAlarm` and `runtime.onStartup` use the same pattern.
+
+On Firefox, the model is loaded before the user can practically click, so events reach handlers synchronously, as today. A click during the first moments of startup used to find no listener at all. Now it is replayed after the model loads, without the gesture, so startup behaviour is no worse than before.
+
+On Chrome, the click that wakes the worker is queued and replayed after the model rebuilds. Chrome has no sidebar to open, so losing the gesture context costs nothing there. The exception is "show popup", see Open question 9.
+
+If the model fails to load, queued events are never handled. Today's code behaves the same, because it registers no listeners at all in that case. On Chrome the next wake retries.
 
 **b. Leave the model's own sync listeners where they are.** The tabs and bookmarks models register their listeners in their constructors (`src/model/tabs.ts:217-233`, `src/model/bookmarks.ts:192-195`) to keep in-memory state current. They run after an `await`. Chrome documents only top-level registration as the way to get events on start [R20], so we do not count on these listeners to wake the worker. On every wake the model rebuilds from `tabs.query` and `bookmarks.getSubTree`, so it starts from current browser state either way. Phase 0 measures which events actually wake the worker.
 
 **c. Register the IndexedDB store services synchronously and open the databases lazily.**
 
 - **Constructor change.** `KVSService`'s constructor changes from taking an open `IDBPDatabase` (`src/datastore/kvs/service.ts:51-56`) to taking a `Promise<IDBPDatabase>`. Every `KeyValueStore` method awaits it, so requests that arrive while the database is opening wait for it.
-- **Registration moves earlier.** The three `listen()` calls move to the top of `src/index.ts`. `listen()` adds the `runtime.onConnect` listener only when the first service registers (`src/util/nanoservice/live.ts:59-82`). That works around Firefox bug 1465514, where dropping a connection could drop unrelated ones. The workaround still holds: all three services register in the same synchronous run, before any connection can arrive, so no connection is dropped for an unknown service.
+- **Registration moves earlier.** `service_model()` (`src/service-model.ts`) creates the three services and calls `listen()` for each before its first `await`. `src/index.ts` calls `service_model()` synchronously at load time (`logErrorsFrom` runs its callback immediately, `src/util/oops.ts:19-26`), so the services register during the worker's first run. `listen()` adds the `runtime.onConnect` listener only when the first service registers (`src/util/nanoservice/live.ts:59-82`). That works around Firefox bug 1465514, where dropping a connection could drop unrelated ones. The workaround still holds: all three services register in the same synchronous run, before any connection can arrive, so no connection is dropped for an unknown service.
 - **Failure handling.** If `openDB` fails, every request rejects with that error, and `KVSClient` retries with backoff (`src/datastore/kvs/client.ts:101-123`).
 - **Firefox timing.** The favicons model writes to its store while it is constructed, so the databases still open at startup.
 
@@ -222,15 +227,18 @@ The toolbar button handler, `pageAction.onClicked` and `alarms.onAlarm` follow t
 
 On Firefox it resolves to `browserAction`.
 
-**f. Typing.** `@types/webextension-polyfill` describes MV2 and has no `browser.action` or `browser.alarms` types. We add a small local declaration in `src/util/browser-mv3.d.ts` rather than `any` casts at call sites.
+**f. No new typings.** `@types/webextension-polyfill` already declares `browser.action` and `browser.alarms`, so the code needs no casts or local declarations.
 
 ### 3. Chrome-only paths
 
-Each of these is gated on a feature Firefox's MV2 build lacks, so Firefox never runs it.
+Each of these is gated so that Firefox's MV2 build never runs it:
+
+- the alarm work on `browser.alarms`, which Firefox doesn't expose without the `alarms` permission;
+- the menu work on `browser.runtime.getManifest().manifest_version === 3`, because context names are an MV3 rule rather than a browser feature.
 
 **a. Context menus.**
 
-- **Context names.** When `browser.action` exists, `menu()` maps the `browser_action` context to `action` [R22]. The `page_action` menu (`src/index.ts:144-155`) already filters out on Chrome, because Chrome has no page action.
+- **Context names.** Under MV3, `menu()` maps the `browser_action` context to `action` [R22] and drops `page_action`, because MV3 has no page action. It does this before filtering by `ContextType`, and skips creating any menu whose context list ends up empty.
 - **Re-creation.** We have not verified whether Chrome keeps menus across worker or browser restarts [R22]. So on Chrome we `await browser.contextMenus.removeAll()` and re-create the menus on every wake. During those few milliseconds a click can find no menu, but the click itself wakes the worker and the menu is rebuilt.
 
 **b. Popup mode.** `setupPopup` (`src/index.ts:328-345`) runs on every wake. We have not verified whether `setPopup` survives a restart [R7]. Re-applying it costs one API call and doesn't depend on the answer. When a popup is set, Chrome opens it without waking the worker.
@@ -274,8 +282,8 @@ Each of these is gated on a feature Firefox's MV2 build lacks, so Firefox never 
 
 - **Firefox carries refactoring risk for a Chrome feature.**
   - **The risk.** Section 2 changes listener and startup order in `src/index.ts` and `src/service-model.ts`. Both are excluded from coverage (`c8 ignore`). A mistake ships to every Firefox user, and the gesture rule in 2a is easy to break silently.
-  - **Mitigation.** A Chrome spike (Phase 0) proves the design before Firefox code changes. Phase 1 lands Section 2 alone, with a behavioural checklist and a named rollback.
-- **The two manifests will drift.** A new permission, command or locale key added to `manifest.json` won't reach `manifest-chrome.json` unless someone remembers. A `check-manifests` target could diff the permission and command lists (see Open questions). `check-chrome-manifest` catches only missing files.
+  - **Mitigation.** Phase 0 validates the whole stack in Chrome before any of it, including the Firefox refactor, is submitted upstream. Phase 1 lands Section 2 alone, with a behavioural checklist and a named rollback.
+- **The two manifests will drift.** A new permission, command or locale key added to `manifest.json` won't reach `manifest-chrome.json` unless someone remembers. A `check-manifests` target could diff the permission and command lists (see Open questions). `build-chrome-manifest.js` catches only missing files.
 - **Every cold wake rebuilds the whole model.** The first click or reconnect after 30 seconds idle runs, before the extension acts:
   - `tabs.query({})` and `tabGroups.query` (`src/model/tabs.ts:280-325`);
   - a bookmark subtree walk (`src/model/bookmarks.ts:172-176`);
@@ -293,15 +301,17 @@ Each of these is gated on a feature Firefox's MV2 build lacks, so Firefox never 
 
 ## Rollout
 
-**Phase 0: Chrome spike (not merged).**
+**Phase 0: Chrome validation before anything lands upstream.**
 
-- **Build:** on a throwaway branch, apply Section 1 plus a minimal version of 2a, 2c, 2d and 2e, and load it in current stable Chrome.
+- **When:** Phases 1 and 2 are developed as one stack of commits, and nothing in the stack is submitted upstream until this phase passes.
+- **How:** load the stack's `dist-chrome/` build in current stable Chrome.
 - **Measure:**
   - **Idle port.** Does an idle open port keep the worker alive (Open question 3)?
   - **Wake sources.** Which events wake the worker?
   - **Latency.** What is the cold wake-to-action latency with 500 open tabs and 2,000 stashed bookmarks?
   - **Context menus.** Does Chrome accept the `browser_action` context in MV3 (Open question 7)?
-- **Exit criteria:** record the answers in this RFC. If cold wake exceeds 1 second, revise Section 2 before Phase 1, for example by loading only the bookmarks model for menu commands.
+  - **Popup.** Can `action.openPopup()` run without a user gesture (Open question 9)?
+- **Exit criteria:** record the answers in this RFC. If cold wake exceeds 1 second, revise Section 2 before submitting Phase 1, for example by loading only the bookmarks model for menu commands.
 - **Owner:** whoever implements Phase 1.
 
 **Phase 1: Shared background refactor (Firefox-visible, no behaviour change).**
@@ -323,11 +333,11 @@ Each of these is gated on a feature Firefox's MV2 build lacks, so Firefox never 
 **Phase 2: Chrome manifest, build targets and Chrome-only paths.**
 
 - **Work:**
-  - add `assets/manifest-chrome.json` and `stamp-chrome-manifest.js`, and delete `patch-manifest-for-chrome.js`;
+  - add `manifest-chrome.json` and `build-chrome-manifest.js`, and delete `patch-manifest-for-chrome.js`;
   - add Section 3;
-  - update `build-chrome-dbg`, and add `build-chrome-rel`, `pkg-chrome` and `check-chrome-manifest`.
+  - update `build-chrome-dbg`, and add `build-chrome-rel` and `pkg-chrome`.
 - **Exit criteria:**
-  - `check-chrome-manifest` passes;
+  - `build-chrome-manifest.js` reports no missing files;
   - `dist-chrome/` loads unpacked in current stable Chrome with no errors on `chrome://extensions` or in the service worker console;
   - the toolbar icon renders.
 
