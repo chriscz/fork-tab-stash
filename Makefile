@@ -59,6 +59,7 @@ check-e2e: check-e2e-chrome check-e2e-firefox
 
 check-e2e-chrome: build-chrome-dbg
 	node --test e2e/chrome.test.cjs
+	TZ=UTC E2E_BROWSER=chrome E2E_DIST=dist-chrome node --test $(E2E_SPECS)
 .PHONY: check-e2e-chrome
 
 E2E_DIST ?= dist
