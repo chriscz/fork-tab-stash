@@ -1,0 +1,24 @@
+id: E12
+title: Stashing a URL already in the folder moves it
+given:
+  - The stash has a folder "Reading" with Page 1, and Page 1 is also open.
+when:
+  - The user clicks "Stash all open tabs here" on "Reading".
+then:
+  - '"Reading" still holds exactly one bookmark for Page 1.'
+  - step: Page 1's tab is hidden.
+    browser: firefox
+  - step: Page 1's tab is closed.
+    browser: chrome
+notes: |
+  putItemsInFolder (src/model/index.ts) moves an existing bookmark in the
+  folder with the same URL and title instead of adding a duplicate. The
+  stash list's own tab isn't stashable, so Page 1 is the only tab stashed.
+  The folder's "Stash all open tabs here" link is the only one in its row
+  with class exactly "action stash here" (src/stash-list/folder.vue).
+  Bookmarks are in place before the tab is hidden or closed, so the when
+  step waits for Page 1 to leave the window and the bookmark check then
+  reads the final folder.
+  Mutation check: in src/model/index.ts:892, replace
+  `"url" in item && !options.allowDuplicates` with `false`, so the existing
+  bookmark is never reused; "still holds exactly one bookmark" fails.
