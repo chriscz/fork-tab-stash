@@ -166,7 +166,7 @@ Like today's script, it throws if a key it expects is missing, so a change to th
 
 - `build-chrome-dbg` keeps running `patch-manifest-for-chrome.js` as today.
 - A new `build-chrome-rel` target does the same for release builds.
-- A new `pkg-chrome` target zips the release build into `releases/tab-stash-chrome-X.XX.zip`.
+- A new `pkg-chrome` target zips the release build into `releases/tab-stash-chrome-X.XX-hhhhhhh.zip`.
 - `rel` stays Firefox-only until the maintainer decides to ship Chrome.
 
 ### 2. A shared background that tolerates restarts
@@ -177,6 +177,7 @@ These changes apply to both builds. On Firefox they must not change visible beha
 
 - **It registers at load time.** It adds a listener to the browser event as soon as `src/index.ts` loads.
 - **It queues early events.** Events that arrive before a handler is attached are queued and replayed, in order, when the handler is attached.
+- **It survives a throwing handler.** A handler that throws during replay is logged, and the remaining queued events are still delivered.
 - **It delivers synchronously afterwards.** Once the handler is attached, events go straight to it, in the same turn.
 
 ```ts
@@ -193,21 +194,30 @@ export function deferredListener<L extends (...args: any[]) => any>(event: {
   return {
     handle(l: L) {
       handler = l;
-      for (const args of queued.splice(0)) l(...args);
+      for (const args of queued.splice(0)) {
+        try {
+          l(...args);
+        } catch (e) {
+          console.error(e);
+        }
+      }
     },
   };
 }
 
 // src/index.ts, at top level, before the model loads
-const onMenuClicked = deferredListener(browser.contextMenus.onClicked);
+const browserWakeEvents = {
+  menuClicked: deferredListener(browser.contextMenus.onClicked),
+  /* … */
+};
 
 // ...later, inside the existing async block, once `model` exists:
-onMenuClicked.handle((info, tab) => {
+browserWakeEvents.menuClicked.handle((info, tab) => {
   /* unchanged handler body */
 });
 ```
 
-The handler bodies in `src/index.ts` stay as they are. Only the registration call changes. The toolbar button, `pageAction.onClicked`, `alarms.onAlarm` and `runtime.onStartup` use the same pattern.
+The handler bodies in `src/index.ts` stay as they are. Only the registration call changes. The toolbar button, `pageAction.onClicked` and `alarms.onAlarm` use the same pattern. The load-time listeners are grouped in one `browserWakeEvents` object.
 
 On Firefox, the model is loaded before the user can practically click, so events reach handlers synchronously, as today. A click during the first moments of startup used to find no listener at all. Now it is replayed after the model loads, without the gesture, so startup behaviour is no worse than before.
 
@@ -231,7 +241,7 @@ The maintainer asked why this check was needed and worried that deleted items "c
 - **Why the check.** `persist()` is a Window-only API, and MDN says it is "not available in Web Workers" [R14]. Without the check, opening all three stores would throw in Chrome's service worker.
 - **Why the data stays safe.** The Chrome build keeps the `unlimitedStorage` permission. Chrome documents that this permission "exempts extensions from both quota restrictions and eviction" [R18], which is the protection `persist()` exists to provide.
 
-**e. Alias the toolbar-button namespace.** Add `const action = browser.action ?? browser.browserAction` and use it everywhere the code uses `browser.browserAction`:
+**e. Alias the toolbar-button namespace.** Add `const browserAction = browser.action ?? browser.browserAction` and use it everywhere the code uses `browser.browserAction`:
 
 - `onClicked`
 - `setPopup`
@@ -248,37 +258,37 @@ On Firefox it resolves to `browserAction`.
 Each of these is gated so that Firefox's MV2 build never runs it:
 
 - the alarm work on `browser.alarms`, which Firefox doesn't expose without the `alarms` permission;
-- the menu work on `browser.runtime.getManifest().manifest_version === 3`, because context names are an MV3 rule rather than a browser feature.
+- the menu work on `browser.action`, which Firefox exposes only under MV3, the same rule that renames the menu contexts.
 
 **a. Context menus.**
 
-- **Context names.** Under MV3, `menu()` maps the `browser_action` context to `action` [R22] and drops `page_action`, because MV3 has no page action. It does this before filtering by `ContextType`, and skips creating any menu whose context list ends up empty.
+- **Context names.** Under MV3, `menu()` maps the `browser_action` context to `action` [R22] before filtering by `ContextType`. The page-action menu is created only `if (browser.pageAction)`, following the existing `browser.sidebarAction` checks, because MV3 has no page action.
 - **Re-creation.** We have not verified whether Chrome keeps menus across worker or browser restarts [R22]. So on Chrome we `await browser.contextMenus.removeAll()` and re-create the menus on every wake. During those few milliseconds a click can find no menu, but the click itself wakes the worker and the menu is rebuilt.
+- **Separator ids.** Chrome requires an `id` for every context-menu item, separators included, when the background is a service worker, so `menu()` gives separators ids too. This is harmless on Firefox.
 
 **b. Popup mode.** `setupPopup` (`src/index.ts:328-345`) runs on every wake. We have not verified whether `setPopup` survives a restart [R7]. Re-applying it costs one API call and doesn't depend on the answer. When a popup is set, Chrome opens it without waking the worker.
 
 **c. Recurring jobs.**
 
-- **Hidden-tab jobs.** Auto-discarding hidden tabs (`src/index.ts:502-560`) and closing hidden tabs for removed bookmarks (`:440-470`) can never find a hidden tab on Chrome. We wrap both in `if (browser.tabs.hide)`, like the rest of the hidden-tab code.
-- **Daily GC.** When `browser.alarms` exists, `index.ts` calls `alarms.get("gc")` and creates the 24-hour alarm only if it is missing. Calling `create` unconditionally would reset the schedule on every wake, because "it will be cancelled and replaced by this alarm" [R6].
-- **GC at startup.** The startup `gc()` call moves to `runtime.onStartup` on Chrome, so it runs once per browser session, as on Firefox.
+- **Hidden-tab cleanup.** Closing hidden tabs for removed bookmarks (`src/index.ts:440-470`) walks the whole stash (`urlsInStash()`) on every start, and can never find a hidden tab on Chrome. We skip it `if (!browser.tabs.hide)`, like the rest of the hidden-tab code, so it doesn't add to every wake. Auto-discarding (`:502-560`) needs no change: its timer dies with the worker, and it finds no hidden tabs anyway.
+- **Daily GC.** When `browser.alarms` exists, `index.ts` calls `alarms.get("gc")` and creates the alarm only if it is missing, with `{delayInMinutes: 1, periodInMinutes: 24 * 60}`. Calling `create` unconditionally would reset the schedule on every wake, because "it will be cancelled and replaced by this alarm" [R6]. The one-minute delay gives a fresh install, or a browser that lost its alarms, an early GC, which replaces Firefox's GC at startup. The Chrome branch returns before Firefox's GC code, which stays unchanged.
 - **Firefox.** Its manifest does not request `alarms`, so it keeps its `setTimeout` loops and its startup `gc()` unchanged.
 
 ### Before and after
 
-| Concern                 | Firefox today          | Firefox after                    | Chrome after                          |
-| ----------------------- | ---------------------- | -------------------------------- | ------------------------------------- |
-| Manifest                | `manifest.json`        | unchanged                        | generated from `manifest.json` (MV3)  |
-| Background lifetime     | persistent page        | persistent page                  | service worker, stopped when idle     |
-| Waking listeners        | after model load       | top-level, sync                  | top-level, sync                       |
-| Handler with model      | synchronous            | synchronous (gesture rules kept) | async on cold wake, sync while warm   |
-| IndexedDB stores opened | at startup             | at startup                       | at each wake                          |
-| Toolbar button API      | `browserAction`        | `browserAction` (via alias)      | `action` (via alias)                  |
-| Popup mode              | `setPopup` at startup  | unchanged                        | `setPopup` re-applied on each wake    |
-| Context menus           | created at startup     | unchanged                        | removed and re-created on each wake   |
-| Daily GC                | `setTimeout` + startup | unchanged                        | `chrome.alarms` + `runtime.onStartup` |
-| Stashing                | hides tabs             | hides tabs                       | closes tabs (existing fallback)       |
-| Sidebar                 | `sidebar_action`       | unchanged                        | none; stash list opens in a tab       |
+| Concern                 | Firefox today          | Firefox after                    | Chrome after                         |
+| ----------------------- | ---------------------- | -------------------------------- | ------------------------------------ |
+| Manifest                | `manifest.json`        | unchanged                        | generated from `manifest.json` (MV3) |
+| Background lifetime     | persistent page        | persistent page                  | service worker, stopped when idle    |
+| Waking listeners        | after model load       | top-level, sync                  | top-level, sync                      |
+| Handler with model      | synchronous            | synchronous (gesture rules kept) | async on cold wake, sync while warm  |
+| IndexedDB stores opened | at startup             | at startup                       | at each wake                         |
+| Toolbar button API      | `browserAction`        | `browserAction` (via alias)      | `action` (via alias)                 |
+| Popup mode              | `setPopup` at startup  | unchanged                        | `setPopup` re-applied on each wake   |
+| Context menus           | created at startup     | unchanged                        | removed and re-created on each wake  |
+| Daily GC                | `setTimeout` + startup | unchanged                        | `chrome.alarms`                      |
+| Stashing                | hides tabs             | hides tabs                       | closes tabs (existing fallback)      |
+| Sidebar                 | `sidebar_action`       | unchanged                        | none; stash list opens in a tab      |
 
 ## Alternatives considered
 
