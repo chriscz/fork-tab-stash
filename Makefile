@@ -52,6 +52,19 @@ check-i18n: node_modules check-i18n.js
 	node check-i18n.js
 .PHONY: check-i18n
 
+# Not part of `check`: these need Puppeteer and the browsers from
+# install-test-deps.sh.
+check-e2e: check-e2e-chrome check-e2e-firefox
+.PHONY: check-e2e
+
+check-e2e-chrome: build-chrome-dbg
+	node --test e2e/chrome.test.cjs
+.PHONY: check-e2e-chrome
+
+check-e2e-firefox: build-dbg
+	node --test e2e/firefox.test.cjs
+.PHONY: check-e2e-firefox
+
 fix-style: node_modules
 	./node_modules/.bin/prettier --ignore-path .gitignore --write .
 .PHONY: fix-style

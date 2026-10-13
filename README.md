@@ -77,6 +77,10 @@ bin/dev run make      # or `make rel` for a release version
 bin/dev shell         # open a temporary shell in the container
 ```
 
+`bin/dev run make check-e2e` runs the end-to-end tests in Chrome and Firefox.
+They are supported only inside the dev Docker image (on macOS, use Colima or a
+similar Docker runtime).
+
 Run `bin/dev help` to see all commands.
 
 To use Docker directly instead of `bin/dev`:
