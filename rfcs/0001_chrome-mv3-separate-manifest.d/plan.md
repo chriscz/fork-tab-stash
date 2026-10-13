@@ -1,4 +1,4 @@
-# Chrome MV3 Support via a Separate Manifest — Implementation Plan
+# Chrome MV3 Support via a Generated Manifest — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +12,7 @@
 - **Listeners at load time.** Waking listeners register synchronously through a small `deferredListener` helper, which queues events until the model has loaded.
 - **IndexedDB stores.** The store services register before the first `await` and open their databases lazily.
 - **Chrome-only paths.** Daily GC via an alarm, and MV3 menu contexts. These are gated so the Firefox MV2 build never runs them.
-- **Chrome manifest.** A static `manifest-chrome.json` replaces `patch-manifest-for-chrome.js`.
+- **Chrome manifest.** The existing `patch-manifest-for-chrome.js` emits MV3, so the Chrome manifest stays generated from `assets/manifest.json`.
 
 **Tech Stack:** TypeScript, Vue 3 reactivity, Vite (lib build for the background), mocha + chai + fake-indexeddb for tests, `idb`, `webextension-polyfill` 0.12, GNU make, Node 22 (via the `bin/dev` Docker wrapper).
 
@@ -34,20 +34,18 @@
 
 ## File Structure
 
-| File                                        | Change | Responsibility                                                                  |
-| ------------------------------------------- | ------ | ------------------------------------------------------------------------------- |
-| `src/datastore/kvs/service.ts`              | modify | IndexedDB-backed store service; now accepts a pending database                  |
-| `src/datastore/kvs/service.test.ts`         | modify | Tests for the above, including requests made before the DB opens                |
-| `src/service-model.ts`                      | modify | Builds the background model; registers store services before any `await`        |
-| `src/util/index.ts`                         | modify | Adds `deferredListener` next to the other event helpers (`asyncEvent`)          |
-| `src/util/index.test.ts`                    | modify | Tests for `deferredListener`                                                    |
-| `src/index.ts`                              | modify | Background entry: load-time listeners, `action` alias, Chrome GC and menus      |
-| `manifest-chrome.json`                      | create | Hand-maintained Chrome MV3 manifest (plain JSON)                                |
-| `build-chrome-manifest.js`                  | create | Stamps the version, checks referenced files, writes `dist-chrome/manifest.json` |
-| `patch-manifest-for-chrome.js`              | delete | Replaced by the two files above                                                 |
-| `Makefile`                                  | modify | `build-chrome-dbg`, new `build-chrome-rel` and `pkg-chrome`                     |
-| `README.md`                                 | modify | Describe the Chrome build                                                       |
-| `rfcs/0001_chrome-mv3-separate-manifest.md` | modify | Task 6 records validation results                                               |
+| File                                        | Change | Responsibility                                                             |
+| ------------------------------------------- | ------ | -------------------------------------------------------------------------- |
+| `src/datastore/kvs/service.ts`              | modify | IndexedDB-backed store service; now accepts a pending database             |
+| `src/datastore/kvs/service.test.ts`         | modify | Tests for the above, including requests made before the DB opens           |
+| `src/service-model.ts`                      | modify | Builds the background model; registers store services before any `await`   |
+| `src/util/index.ts`                         | modify | Adds `deferredListener` next to the other event helpers (`asyncEvent`)     |
+| `src/util/index.test.ts`                    | modify | Tests for `deferredListener`                                               |
+| `src/index.ts`                              | modify | Background entry: load-time listeners, `action` alias, Chrome GC and menus |
+| `patch-manifest-for-chrome.js`              | modify | Generates Chrome's MV3 manifest from `assets/manifest.json`                |
+| `Makefile`                                  | modify | `build-chrome-dbg`, new `build-chrome-rel` and `pkg-chrome`                |
+| `README.md`                                 | modify | Describe the Chrome build                                                  |
+| `rfcs/0001_chrome-mv3-separate-manifest.md` | modify | Task 6 records validation results                                          |
 
 ## Commit stack
 
@@ -55,7 +53,7 @@
 | ---- | ------------------------------------------------------------------------------ | ------------- |
 | 1    | `refactor(rfc-0001): register IndexedDB store services before the first await` | §2c, §2d      |
 | 2    | `refactor(rfc-0001): register background listeners synchronously at load`      | §2a, §2e      |
-| 3    | `feat(rfc-0001): build the Chrome extension from a separate MV3 manifest`      | §1            |
+| 3    | `feat(rfc-0001): generate a Manifest V3 manifest for Chrome`                   | §1            |
 | 4    | `feat(rfc-0001): run Chrome's daily GC from an alarm`                          | §3c           |
 | 5    | `feat(rfc-0001): create context menus with MV3 contexts on Chrome`             | §3a           |
 | 6    | `docs(rfc-0001): record Chrome and Firefox validation results`                 | Phase 0, 1, 3 |
@@ -490,145 +488,142 @@ EOF
 
 ---
 
-### Task 3: Build the Chrome extension from a separate MV3 manifest
+### Task 3: Generate a Manifest V3 manifest for Chrome
 
 **Files:**
 
-- Create: `manifest-chrome.json`
-- Create: `build-chrome-manifest.js`
-- Delete: `patch-manifest-for-chrome.js`
+- Modify: `patch-manifest-for-chrome.js` (whole file, 26 lines)
 - Modify: `Makefile` (variables near line 20; `build-chrome-dbg` at lines 137-143; new targets)
 - Modify: `README.md:58`
 
 **Interfaces:**
 
 - Consumes: Tasks 1–2, so the background works as a service worker.
-- Produces: `make build-chrome-dbg` and `make build-chrome-rel` write an MV3 `dist-chrome/`, and `make pkg-chrome` writes `releases/tab-stash-chrome-<version>.zip`.
+- Produces:
+  - `make build-chrome-dbg` and `make build-chrome-rel` write an MV3 `dist-chrome/` whose manifest is generated from `assets/manifest.json`;
+  - `make pkg-chrome` writes `releases/tab-stash-chrome-<version>.zip`.
 
-- [ ] **Step 1: Create `manifest-chrome.json`**
+The maintainer asked for the Chrome manifest to stay generated from `assets/manifest.json` by this script (PR #711, see `CLAUDE.md`). Do not add a second manifest file.
 
-```json
-{
-  "manifest_version": 3,
-  "minimum_chrome_version": "148",
-  "default_locale": "en",
-  "name": "__MSG_extensionName__",
-  "version": "0",
-  "description": "__MSG_extensionDescription__",
-  "homepage_url": "https://josh-berry.github.io/tab-stash/",
-  "icons": {
-    "16": "icons/logo-16.png",
-    "32": "icons/logo-32.png",
-    "48": "icons/logo-48.png",
-    "64": "icons/logo-64.png",
-    "96": "icons/logo-96.png",
-    "128": "icons/logo-128.png"
-  },
-  "permissions": [
-    "sessions",
-    "tabs",
-    "tabGroups",
-    "bookmarks",
-    "contextMenus",
-    "storage",
-    "unlimitedStorage",
-    "alarms"
-  ],
-  "background": {
-    "service_worker": "index.js"
-  },
-  "action": {
-    "default_title": "__MSG_extensionName__",
-    "default_icon": {
-      "16": "icons/logo-16.png",
-      "32": "icons/logo-32.png",
-      "64": "icons/logo-64.png"
-    }
-  },
-  "options_ui": {
-    "page": "options.html",
-    "open_in_tab": true
-  },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self';"
-  },
-  "commands": {
-    "_execute_action": {
-      "suggested_key": {
-        "default": "Alt+Shift+T",
-        "mac": "MacCtrl+Shift+T"
-      }
-    }
-  }
-}
-```
+- [ ] **Step 1: Record the current output**
 
-The `version` is a placeholder. `build-chrome-manifest.js` overwrites it.
+Run: `bin/dev run sh -c 'node patch-manifest-for-chrome.js > /tmp/before.json && grep -c "manifest_version\": 2" /tmp/before.json'`
+Expected: `1`. Today's script emits MV2.
 
-- [ ] **Step 2: Create `build-chrome-manifest.js`**
+- [ ] **Step 2: Rewrite `patch-manifest-for-chrome.js`**
+
+Replace the whole file with:
 
 ```js
-// Writes <outDir>/manifest.json from manifest-chrome.json.  The version comes
-// from the Firefox manifest so it is set in one place, and the build fails if
-// the manifest references a file missing from <outDir>.  [RFC 0001 §1]
-//
-// Usage: node build-chrome-manifest.js dist-chrome
+// Generates Chrome's Manifest V3 manifest from the Firefox (MV2) one, so that
+// changes to assets/manifest.json carry over to Chrome automatically.
+// [RFC 0001 §1]
 
-import fs from "node:fs";
-import path from "node:path";
+import manifest from "./assets/manifest.json" with {type: "json"};
 
-const outDir = process.argv[2];
-const out = path.join(outDir, "manifest.json");
-const readJSON = file => JSON.parse(fs.readFileSync(file, "utf8"));
-
-const manifest = readJSON("manifest-chrome.json");
-manifest.version = readJSON("assets/manifest.json").version;
-
-const referenced = [
-  ...Object.values(manifest.icons),
-  ...Object.values(manifest.action.default_icon),
-  manifest.background.service_worker,
-  manifest.options_ui.page,
-];
-const missing = referenced.filter(f => !fs.existsSync(path.join(outDir, f)));
-if (missing.length > 0) {
-  // Don't leave the copied Firefox manifest behind looking like a success.
-  fs.rmSync(out, {force: true});
-  console.error(
-    `${outDir} is missing files referenced by manifest-chrome.json: ` +
-      missing.join(", "),
-  );
-  process.exit(1);
+function required(value, what) {
+  if (value === undefined) throw new Error(`${what} key missing`);
+  return value;
 }
 
-fs.writeFileSync(out, JSON.stringify(manifest, undefined, 2) + "\n");
+manifest.manifest_version = 3;
+// Chrome 148 exposes extension APIs natively as browser.*.  [RFC 0001 R12]
+manifest.minimum_chrome_version = "148";
+delete manifest.browser_specific_settings;
+
+const permsToDrop = [
+  "tabHide",
+  "browserSettings",
+  "contextualIdentities",
+  "cookies",
+];
+manifest.permissions = required(manifest.permissions, "permissions")
+  .filter(p => !permsToDrop.includes(p))
+  .concat(["alarms"]);
+
+const scripts = required(manifest.background?.scripts, "background.scripts");
+if (scripts.length !== 1) {
+  throw new Error(`expected one background script, got ${scripts.length}`);
+}
+manifest.background = {service_worker: scripts[0]};
+
+manifest.action = required(manifest.browser_action, "browser_action");
+delete manifest.browser_action;
+delete manifest.action.theme_icons;
+delete manifest.action.browser_style;
+const icon = required(manifest.action.default_icon, "action.default_icon");
+// Chrome doesn't support SVG icons; the build makes these PNGs.
+for (const k in icon) icon[k] = `icons/logo-${k}.png`;
+
+delete manifest.page_action;
+delete manifest.sidebar_action;
+
+delete manifest.options_ui.browser_style;
+manifest.options_ui.open_in_tab = true;
+
+manifest.content_security_policy = {
+  extension_pages: required(
+    manifest.content_security_policy,
+    "content_security_policy",
+  ),
+};
+
+const commands = required(manifest.commands, "commands");
+commands._execute_action = required(
+  commands._execute_browser_action,
+  "commands._execute_browser_action",
+);
+commands._execute_action.suggested_key.default = "Alt+Shift+T";
+delete commands._execute_browser_action;
+delete commands._execute_sidebar_action;
+delete commands._execute_page_action;
+
+console.log(JSON.stringify(manifest, undefined, 2));
 ```
 
-- [ ] **Step 3: Update the Makefile**
+- [ ] **Step 3: Check the generated manifest**
 
-3a. Below the line `DIST_PKG = $(RELEASE_DIR)/$(PACKAGE)-$(FULL_VERSION).zip` (line 20), add:
+Run:
+
+```bash
+bin/dev run sh -c 'node patch-manifest-for-chrome.js > /tmp/after.json && node -e "
+const m = JSON.parse(require(\"fs\").readFileSync(\"/tmp/after.json\"));
+const v = JSON.parse(require(\"fs\").readFileSync(\"assets/manifest.json\")).version;
+console.log(m.manifest_version, m.version === v, m.background.service_worker,
+  JSON.stringify(m.action.default_icon), m.permissions.join(\",\"),
+  Object.keys(m.commands).join(\",\"), typeof m.content_security_policy,
+  [\"browser_action\",\"page_action\",\"sidebar_action\",\"browser_specific_settings\"].filter(k => k in m).length)
+"'
+```
+
+Expected (one line):
+
+```
+3 true index.js {"16":"icons/logo-16.png","32":"icons/logo-32.png","64":"icons/logo-64.png"} sessions,tabs,tabGroups,bookmarks,contextMenus,storage,unlimitedStorage,alarms _execute_action object 0
+```
+
+- [ ] **Step 4: Update the Makefile**
+
+4a. Below the line `DIST_PKG = $(RELEASE_DIR)/$(PACKAGE)-$(FULL_VERSION).zip` (line 20), add:
 
 ```make
 CHROME_PKG = $(RELEASE_DIR)/$(PACKAGE)-chrome-$(FULL_VERSION).zip
 ```
 
-3b. Replace the whole `build-chrome-dbg` rule (from `build-chrome-dbg: build-dbg` through its `.PHONY: build-chrome-dbg` line) with:
+4b. Leave the existing `build-chrome-dbg` rule as it is. Directly after its `.PHONY: build-chrome-dbg` line, add:
 
 ```make
-build-chrome-dbg: build-dbg
-	rsync -aHvx --delete --force dist/ dist-chrome/
-	node ./build-chrome-manifest.js dist-chrome
-.PHONY: build-chrome-dbg
 
 build-chrome-rel: build-rel
 	rsync -aHvx --delete --force dist/ dist-chrome/
-	node ./build-chrome-manifest.js dist-chrome
+	node ./patch-manifest-for-chrome.js >dist-chrome/manifest.json || (\
+		rm -f dist-chrome/manifest.json; \
+		exit 1 \
+	)
 .PHONY: build-chrome-rel
 ```
 
-Recipe lines must start with a tab character, as in the rest of the Makefile.
-
-3c. Directly after the `pkg-webext` rule's `.PHONY: pkg-webext` line, add:
+4c. Directly after the `pkg-webext` rule's `.PHONY: pkg-webext` line, add:
 
 ```make
 
@@ -638,9 +633,7 @@ pkg-chrome: clean-working-tree build-chrome-rel
 .PHONY: pkg-chrome
 ```
 
-- [ ] **Step 4: Delete the old patch script**
-
-Run: `git rm patch-manifest-for-chrome.js`
+Recipe lines must start with a tab character, as in the rest of the Makefile.
 
 - [ ] **Step 5: Update the README**
 
@@ -654,43 +647,28 @@ with:
 
 ```markdown
 - `dist-chrome`: A highly-experimental Manifest V3 port to Chrome 148 or
-  newer (also unpacked; load it from `chrome://extensions` with Developer
-  mode on). `make pkg-chrome` packs a release build of it.
+  newer (also unpacked). `make pkg-chrome` packs a release build of it.
 ```
 
-- [ ] **Step 6: Verify the missing-file check fails when it should**
+- [ ] **Step 6: Run the full build**
 
-Run:
+Run: `bin/dev run make`, then `git diff master -- assets/manifest.json`.
+Expected: `make` exits 0 (626 passing), `dist-chrome/manifest.json` contains `"manifest_version": 3`, and the diff prints nothing.
 
-```bash
-bin/dev run make build-chrome-dbg
-bin/dev run sh -c 'mv dist-chrome/icons/logo-16.png /tmp/ && node build-chrome-manifest.js dist-chrome; echo exit=$?; test ! -e dist-chrome/manifest.json && echo removed; mv /tmp/logo-16.png dist-chrome/icons/'
-```
-
-Expected: the second command prints `dist-chrome is missing files referenced by manifest-chrome.json: icons/logo-16.png, icons/logo-16.png`, then `exit=1`, then `removed`. The path appears twice because both `icons` and `action.default_icon` reference it.
-
-- [ ] **Step 7: Run the full build and inspect the Chrome manifest**
-
-Run: `bin/dev run make && bin/dev run node -e 'const m=JSON.parse(require("fs").readFileSync("dist-chrome/manifest.json"));console.log(m.manifest_version, m.version, m.background.service_worker)'`
-Expected:
-
-- `make` exits 0;
-- the second command prints `3 3.5 index.js` (the version matches `assets/manifest.json`);
-- `git diff master -- assets/manifest.json` prints nothing.
-
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add manifest-chrome.json build-chrome-manifest.js Makefile README.md
+git add patch-manifest-for-chrome.js Makefile README.md
 git commit -F - <<'EOF'
-feat(rfc-0001): build the Chrome extension from a separate MV3 manifest
+feat(rfc-0001): generate a Manifest V3 manifest for Chrome
 
-Replace patch-manifest-for-chrome.js, which emitted an MV2 manifest that
-current Chrome refuses and pointed at icon files that don't exist, with
-a hand-maintained manifest-chrome.json. build-chrome-manifest.js copies
-the version from the Firefox manifest and fails if a referenced file is
-missing. Add build-chrome-rel and pkg-chrome targets. The Firefox
-manifest and build are unchanged.
+Current Chrome refuses MV2 extensions. patch-manifest-for-chrome.js now
+turns the Firefox manifest into an MV3 one: a service-worker background,
+action instead of browser_action, an object CSP, _execute_action, PNG
+toolbar icons (the SVG paths it emitted never existed), and alarms in
+place of the Firefox-only permissions. The Chrome manifest stays
+generated from assets/manifest.json. Add build-chrome-rel and
+pkg-chrome targets.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
@@ -848,11 +826,7 @@ In `function menu(idprefix, contexts, def)`, insert this as the first statement 
 ```ts
 if (MV3) {
   contexts = contexts.flatMap((c): Menus.ContextType[] =>
-    c === "browser_action"
-      ? ["action" as Menus.ContextType]
-      : c === "page_action"
-        ? []
-        : [c],
+    c === "browser_action" ? ["action"] : c === "page_action" ? [] : [c],
   );
 }
 ```
