@@ -8,7 +8,7 @@
 
 **Tech Stack:** as RFC 0002: node:test `.cts` suites, Puppeteer 25.13.0, Firefox 157.0.1, Chrome for Testing 155, the dev Docker image (`bin/dev`, `bin/e2e`), mocha unit tests via `bin/dev run make`.
 
-**Spec:** [RFC 0002](../0002_firefox-baseline-e2e-suite.md), "Specs for upstream bugs this fork fixes" (Rules) and "Phase D" (Rollout), commit `f4bfbd0`. Bugs: [`TASKS.md`](../../TASKS.md), "Open bugs".
+**Spec:** [RFC 0002](../0002_firefox-baseline-e2e-suite.md), "Specs for upstream bugs this fork fixes" (Rules) and "Phase D" (Rollout), commit `1c93719`. Bugs: [`TASKS.md`](../../TASKS.md), "Open bugs".
 
 ## Global Constraints
 
@@ -26,7 +26,7 @@
 
 | Task | Commit                                                                                                                                              |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | `docs(rfc-0002): add Phase D, specs for the upstream bugs this fork fixes` (done, `f4bfbd0`) and `docs(rfc-0002): add the Phase D plan` (this file) |
+| 0    | `docs(rfc-0002): add Phase D, specs for the upstream bugs this fork fixes` (done, `1c93719`) and `docs(rfc-0002): add the Phase D plan` (this file) |
 | 1    | `test(rfc-0002): run upstream-bug specs as todo on reference builds`                                                                                |
 | 2    | `test(rfc-0002): make the deleted-items filter test deterministic [pre-existing]`                                                                   |
 | 3    | `fix(rfc-0002): don't copy the Tab Stash page when copying all tabs [pre-existing]`                                                                 |

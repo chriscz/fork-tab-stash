@@ -21,7 +21,7 @@ This RFC does not remove the barrier the maintainer named for a Chrome port: ope
 - **Toolbar rules.** `canBrowserActionShow()` (`:229`) refuses "sidebar" without `sidebarAction`. With `canBrowserActionStash()` (`:217`), it also enforces that a toolbar set to show the popup can't stash: once a popup is set, the browser shows it instead of firing `onClicked`. The setup page explains this rule with two notes, `setupCantShowPopupNote` (`src/setup/index.vue:49`) and `setupPopupNote` (`:114`).
 - **Background.** `src/index.ts` adds the "Show Stashed Tabs in Sidebar" menu items only `if (browser.sidebarAction)` (`:154`, `:174`, `:188`), and words the "show in a tab" item to match (`:134`). The `show_sidebar_or_tab` command (`:205`) calls `sidebarAction.open()`, and opens a tab where that API is missing.
 
-All code references are to commit `06b200f`. That commit passes the clicked tab to `show_something()` and the `show_*` commands, so Tab Stash opens in the window the user clicked in.
+All code references are to commit `e6b805b`. That commit passes the clicked tab to `show_something()` and the `show_*` commands, so Tab Stash opens in the window the user clicked in.
 
 **Firefox allows opening the sidebar only before the handler's first `await`.** The comments at `src/index.ts:198-203` and `:283-285` say so, and `show_something()` is called synchronously for that reason. `setupPopup()` (`:368`) exists for the same rule: it sets the toolbar popup ahead of time, on every wake and every options change, because a popup can't be set and opened in the same click.
 
@@ -374,7 +374,7 @@ External claims were checked on 2026-10-14. Third-party reports are marked as su
 - **[R4]** The maintainer's comments on josh-berry/tab-stash issue #52, summarised in [maintainer-views.md](0001_chrome-mv3-separate-manifest.d/maintainer-views.md): the popup closing stops operations running in it, which he calls "the single biggest barrier"; and, in March 2026, the bulk of the work is the popup problem, not the sidebar. https://github.com/josh-berry/tab-stash/issues/52
 - **Probes and measurements:** [research.md](0003_chrome-side-panel.d/research.md), with the scripts and logs in [probes/](0003_chrome-side-panel.d/probes/). Chrome for Testing 155.0.8059.39, Puppeteer 25.13.0, dev image.
 
-Code references are to commit `06b200f` on branch `chore/chriscz`:
+Code references are to commit `e6b805b` on branch `chore/chriscz`:
 
 - **Background:** `src/index.ts`
 - **Options model:** `src/model/options.ts`

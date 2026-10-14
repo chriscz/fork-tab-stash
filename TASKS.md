@@ -97,7 +97,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   and Brave, 2026-10-14. Reading the Errors page's entries through
   `chrome.developerPrivate.getExtensionInfo()` showed only the message and
   `index.js` line 3399 (the bundled `console.error()` call).
-- **Fix:** this commit, which also logs the error's stack as text, so the
+- **Fix:** `ed5978c`, which also logs the error's stack as text, so the
   Errors page entry carries the frames. The error object is still logged
   first, so consoles that show it as an object keep doing so.
 
@@ -124,7 +124,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   (`:225`) → `restoreTabs` (`src/model/index.ts:723`). Reproduced in
   headless Chrome by opening a second window and closing it, after which
   Chrome reports `WINDOW_ID_NONE` and gives no window focus.
-- **Fix:** this commit, which gives `restoreTabs()` a `toWindow` option and
+- **Fix:** `e6b805b`, which gives `restoreTabs()` a `toWindow` option and
   has those commands pass the window of the tab the user clicked from. E24
   checks the toolbar button on Chrome, and E25 the tab menu's "Show
   Stashed Tabs".
@@ -145,7 +145,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   Upstream `622bf3d` has the same code (`restoreTabs()` uses only
   `targetWindow`, and the menu handler ends in `.catch(console.log)`).
 - **Found:** reviewing the fix above, 2026-10-14.
-- **Fix:** this commit. When neither the caller nor the model names a
+- **Fix:** `4f92764`. When neither the caller nor the model names a
   window, `restoreTabs()` asks the browser for the last focused window, and
   fails as before only if the model doesn't know that one either. Menu
   failures now go through `logError()`. Only a unit test in
@@ -165,7 +165,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   until the focus changes. Upstream `622bf3d` has the same code.
 - **Found:** debugging the Chrome toolbar and tab menu bugs found by hand,
   2026-10-14.
-- **Fix:** this commit, which uses the model's `Window` when it already has one.
+- **Fix:** `1a3e0b7`, which uses the model's `Window` when it already has one.
 
 ### Chrome rejects dotted plural message keys
 
@@ -174,7 +174,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **What:** keys such as `child_group.one` aren't allowed by Chrome, so the
   Chrome build didn't load at all.
 - **Found:** the Chrome end-to-end test, 2026-10-13.
-- **Fix:** `be0e7fc`, which uses `_` as the plural separator. Part of RFC 0001's
+- **Fix:** `e815246`, which uses `_` as the plural separator. Part of RFC 0001's
   stack.
 
 ### Chrome refuses to open tabs when restoring
@@ -187,7 +187,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Effect:** on Chrome, restoring a bookmark or folder opened nothing.
   Firefox ignored the empty key. Upstream `622bf3d` has the same code.
 - **Found:** the Chrome end-to-end run of E06, E07 and E16, 2026-10-14.
-- **Fix:** `a962957`, which leaves the key out when it's undefined.
+- **Fix:** `0a01b03`, which leaves the key out when it's undefined.
 
 ### Stashing skips a position for every tab it leaves out
 
@@ -201,7 +201,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   selection that includes an unstashable tab) put the items one place too
   late per skipped tab. Upstream `622bf3d` has the same code.
 - **Found:** the Chrome end-to-end run of E02, E05, E15 and E20, 2026-10-14.
-- **Fix:** `935731c`, which advances the index only when an item is placed.
+- **Fix:** `11cd6b0`, which advances the index only when an item is placed.
 
 ### A deleted-items unit test fails about once in a thousand runs
 
@@ -217,7 +217,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Found:** `bin/dev run make` while adding E7, E9 and E19, 2026-10-13. One
   failure, then 625 passing on the rerun. The second test turned up while
   proving the fix, with "cat" taken out of the word list.
-- **Fix:** this commit's fix, which adds one item titled "Black cat" before the
+- **Fix:** `db0c277`, which adds one item titled "Black cat" before the
   random data in both tests.
 
 ### Stashing with nothing to stash creates an empty folder
@@ -238,7 +238,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   Tab Stash page open, the toolbar button made an empty folder. Reproduced
   with E26 in Firefox and Chrome, and with the stash list's "Stash all" in
   Firefox; each made one empty `saved-…` folder.
-- **Fix:** this commit, which adds `Model.isItemStashable()` (a tab
+- **Fix:** `984a5e6`, which adds `Model.isItemStashable()` (a tab
   `putItemsInFolder()` would stash, or a group holding one) and has both
   skip the stash when no item passes it. E26 checks the toolbar button.
 
@@ -255,7 +255,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Found:** review of the "nothing to stash" fix, 2026-10-14. Reproduced
   with E27 in Firefox and Chrome; each made one empty folder named after
   the group.
-- **Fix:** this commit, which returns before creating the folder when no
+- **Fix:** `42ecd75`, which returns before creating the folder when no
   tab in the group can be stashed, and has `stashableTabsIn()` use
   `Model.isTabStashable()` so it skips exactly what `putItemsInFolder()`
   skips. E27 checks it.
@@ -271,7 +271,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   new, empty folder to the stash.
 - **Found:** review of the "nothing to stash" fix, 2026-10-14. Reproduced
   with E28 in Firefox and Chrome; each made one empty `saved-…` folder.
-- **Fix:** this commit, which returns before creating the folder unless
+- **Fix:** `92e02cb`, which returns before creating the folder unless
   `Model.isTabStashable()` says the tab would be stashed. E28 checks it.
 
 ### Alt-clicking "Stash all" copies the Tab Stash page too
@@ -290,7 +290,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   622bf3d in Firefox. The hidden tabs turned up while fixing it, by reading
   upstream `61d6316`, which moved the filtering into `putItemsInFolder()`;
   not reproduced in a browser.
-- **Fix:** this commit's fix, which adds `Model.copyIfStashable()`: it leaves
+- **Fix:** `7d1c808`, which adds `Model.copyIfStashable()`: it leaves
   out the tabs `putItemsInFolder()` would skip (`Model.isTabStashable()`,
   now shared with it) before copying. E04 checks the folder's full contents.
   Copying a tab group still copies its hidden or unstashable children, since
@@ -314,7 +314,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   pages, `browser.bookmarks.remove` on Page 1's bookmark leaves its hidden
   tab open for 30 s. Renaming Page 2's bookmark between the two makes Page 1's
   tab close.
-- **Fix:** this commit's fix, which also runs `close_removed_bookmarks` on
+- **Fix:** `d0cf745`, which also runs `close_removed_bookmarks` on
   `browser.bookmarks.onCreated`, so the set includes new bookmarks. E14
   checks it.
 
@@ -332,7 +332,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Found:** code survey for RFC 0002, 2026-10-13. Confirmed in Firefox:
   forcing each trigger value through script left the other setting
   unchanged, and each trigger option is disabled on the page.
-- **Fix:** this commit, which removes the dead watchers. E22 checks the
+- **Fix:** `bd2e082`, which removes the dead watchers. E22 checks the
   rule that made them redundant.
 
 ### Showing the popup also opens the sidebar
@@ -358,4 +358,4 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   2026-10-14: with both options set to `"popup"`, "Stash This Tab" from a
   tab's context menu showed the popup and opened the sidebar, and later
   toolbar clicks did the same.
-- **Fix:** this commit's fix, which adds the missing `break;`. E23 checks it.
+- **Fix:** `0d1e4a5`, which adds the missing `break;`. E23 checks it.

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Puppeteer 25.13.0, Chrome for Testing 155.0.8059.39, Firefox 157.0.1 (all pinned in `install-test-deps.sh`), node:test with `.cts` type stripping on Node 22, js-yaml 5.4.3, the dev Docker image (`bin/dev`).
 
-**Spec:** [RFC 0001](../0001_chrome-mv3-separate-manifest.md) Phase 3, "Automated parity run" (commit `6852545`). Harness design: [RFC 0002](../0002_firefox-baseline-e2e-suite.md). Research notes (not committed): `.superpowers/sdd/chrome-research.md`.
+**Spec:** [RFC 0001](../0001_chrome-mv3-separate-manifest.md) Phase 3, "Automated parity run" (commit `9d2d927`). Harness design: [RFC 0002](../0002_firefox-baseline-e2e-suite.md). Research notes (not committed): `.superpowers/sdd/chrome-research.md`.
 
 ## Global Constraints
 
@@ -45,7 +45,7 @@
 
 | Task | Commit                                                                                                        |
 | ---- | ------------------------------------------------------------------------------------------------------------- |
-| 0    | `docs(rfc-0001): run the end-to-end suite on Chrome in Phase 3` (done, `6852545`)                             |
+| 0    | `docs(rfc-0001): run the end-to-end suite on Chrome in Phase 3` (done, `9d2d927`)                             |
 | 0    | `docs(rfc-0001): add the Phase 3 parity-run plan` (this file)                                                 |
 | 1    | `test(rfc-0001): filter hidden tabs in the driver, not in tabs.query`                                         |
 | 2    | `test(rfc-0001): add a Chrome adapter and run the suite on Chrome`                                            |

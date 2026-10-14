@@ -11,12 +11,12 @@ Nothing tests Tab Stash's user-visible behaviour in a real browser, so we can't 
 
 ## Background
 
-**What we have.** Commit `5e98fbe` added Puppeteer 25.13.0, Chrome for Testing 155 and Firefox 157 to the dev Docker image (`install-test-deps.sh`), plus two smoke tests run by `make check-e2e`:
+**What we have.** Commit `9579dfa` added Puppeteer 25.13.0, Chrome for Testing 155 and Firefox 157 to the dev Docker image (`install-test-deps.sh`), plus two smoke tests run by `make check-e2e`:
 
 - `e2e/firefox.test.cjs` installs `dist/` as a temporary add-on and checks that the stash list renders with no errors.
 - `e2e/chrome.test.cjs` stops the Chrome service worker and checks that the daily GC alarm survives.
 
-On its first run the Chrome test found a real bug: Chrome rejected the dotted plural message keys, so the Chrome build hadn't loaded since September (fixed in `be0e7fc`).
+On its first run the Chrome test found a real bug: Chrome rejected the dotted plural message keys, so the Chrome build hadn't loaded since September (fixed in `e815246`).
 
 **How Firefox can be driven.** Firefox's WebDriver BiDi ignores extension pages (Mozilla bug 1755014), so Puppeteer's page API doesn't work there:
 
@@ -321,14 +321,14 @@ bin/e2e test --browser=firefox                        # test this checkout
 bin/e2e test --browser=firefox --ref=622bf3d          # build 622bf3d, test that
 bin/e2e test --browser=firefox --ref=622bf3d --update-goldens   # regenerate goldens
 bin/e2e test --browser=chrome                         # the same suite on Chrome
-bin/e2e test --browser=chrome --ref=bd2efa4 --update-goldens    # Chrome goldens
+bin/e2e test --browser=chrome --ref=dc46d86 --update-goldens    # Chrome goldens
 bin/e2e help
 ```
 
 - **`--browser` is required.**
 - **`--ref=<commit>`** checks out and builds that commit (cached per commit), then runs _this_ checkout's tests against _that_ build. Any commit works: the pinned upstream one, an older commit of ours, or a branch.
 - **`--update-goldens`** requires `--ref`, so goldens can't be regenerated from uncommitted or branch changes by accident.
-- **Both browsers.** Both flags work for Firefox and Chrome. Firefox's goldens come from upstream `622bf3d`. Upstream has no Chrome build that loads, so Chrome's goldens come from a pinned commit of this fork (`bd2efa4`).
+- **Both browsers.** Both flags work for Firefox and Chrome. Firefox's goldens come from upstream `622bf3d`. Upstream has no Chrome build that loads, so Chrome's goldens come from a pinned commit of this fork (`dc46d86`).
 - **The Makefile targets stay the real logic,** so there's still one build system. `bin/e2e` only chooses among them.
 
 Before and after, in the Makefile:
@@ -378,7 +378,7 @@ check-e2e-ref:
 - **Golden screenshots:** `bin/e2e test --browser=firefox --ref=622bf3d --update-goldens` writes them from the baseline build (it sets `UPDATE_SCREENSHOTS=1`). Our branch must then match them.
   - A branch that changes Firefox's UI on purpose regenerates the affected goldens in the same PR, and the reviewer approves the image diff.
   - Nothing in RFC 0001 should change Firefox's UI, so for now the goldens are always the baseline's.
-  - Chrome's goldens live under `screenshots/chrome/` and come from `bin/e2e test --browser=chrome --ref=bd2efa4 --update-goldens`, since upstream has no Chrome build to take them from.
+  - Chrome's goldens live under `screenshots/chrome/` and come from `bin/e2e test --browser=chrome --ref=dc46d86 --update-goldens`, since upstream has no Chrome build to take them from.
 - **A test is accepted only if:**
   - it passes against the baseline (`--ref=622bf3d`), and the whole suite then passes three consecutive runs;
   - it passes against our branch (no Firefox regression);
@@ -464,7 +464,7 @@ The cost we accept is each step's sentence appearing twice, once in the YAML and
 
 ### Phase A results
 
-Recorded on 2026-10-13 at commit `d1aa9a0`.
+Recorded on 2026-10-13 at commit `95c1dc0`.
 
 - **Baseline:** `bin/e2e test --browser=firefox --ref=622bf3d` passed three consecutive runs, 19/19 checks each (E01, E02, E08 and their steps).
 - **Our branch:** `bin/e2e test --browser=firefox` passed three consecutive runs, 28/28 each, including the runner's 9 self-tests.
@@ -485,7 +485,7 @@ Recorded on 2026-10-13 at commit `d1aa9a0`.
 
 ### Phase B and C results
 
-Recorded on 2026-10-14 at commit `07bce90`.
+Recorded on 2026-10-14 at commit `6fcdf57`.
 
 - **Baseline:** `bin/e2e test --browser=firefox --ref=622bf3d` passed three consecutive runs, 123/123 checks each.
 - **Our branch:** `bin/e2e test --browser=firefox` passed three consecutive runs, 133/133 each, including the runner's 10 self-tests.
@@ -522,6 +522,22 @@ Recorded on 2026-10-14 at commit `07bce90`.
   - **`restartBackground()` reports its last error** when the page doesn't come back, rather than only timing out.
   - **`when` steps wait only for what they need,** and each `then` step waits for its own outcome, so a mutation fails the step it's about.
   - **Several planned mutations were no-ops or unreachable** and were replaced; each spec's notes give the edit that was actually verified.
+
+### Phase D results
+
+Recorded on 2026-10-14 at commit `e9ce924`.
+
+- **Upstream bugs fixed,** each in its own commit with `[pre-existing]` at the end of its subject, and each recorded in `TASKS.md`:
+  - Alt-click "Stash all" also copied the Tab Stash page (`7d1c808`). E04 now checks the copied folder's full contents.
+  - Removing a bookmark stashed after startup left its hidden tab open (`d0cf745`). E14 lands as its regression test.
+  - The options page's coupling watchers never fired (`bd2e082` removes them). E22 (`8b7ed69`) checks the rule that made them redundant; it isn't an `upstream-bug` spec and passes on `622bf3d`.
+  - Showing the popup also opened the sidebar (`0d1e4a5`). E23 checks it, picking the menu item from the tab's real context menu (`5d2ec13`).
+  - The deleted-items unit tests failed about once in a thousand runs (`db0c277`). The fix adds a fixed "Black cat" item, so `make` is the test.
+- **Still open:** showing the popup clears the toolbar button's popup, found while reviewing E23's fix. No user can see it in the Firefox the suite runs, so it is recorded in `TASKS.md` with a proposed fix rather than fixed here.
+- **Our branch:** `bin/e2e test --browser=firefox` passed three consecutive runs, 172 checks passing, 0 failing and 2 skipped (E24 and E25, which are Chrome-only), in about 76 s of test time each.
+- **Baseline:** `bin/e2e test --browser=firefox --ref=622bf3d` passed with 122 checks passing, 0 failing, 39 todo and 2 skipped, in about 83 s. The todo checks are the steps of the `upstream-bug` specs, which the runner marks todo on reference builds (`9fcc2f4`): their failures are printed but don't fail the run.
+- **Unit tests:** `bin/dev run make` passed, with 634 tests.
+- **Later specs from Chrome.** Testing RFC 0001's Chrome build by hand found more upstream bugs: Tab Stash failing to show after focus left the browser, and empty folders made by stashing with nothing to stash. Their fixes added E24–E28, and the driver gained real toolbar and menu clicks on both browsers. RFC 0001's "Phase 3 parity results" lists them. E26–E28 run on Firefox as well and are among the counts above.
 
 **After this RFC.** RFC 0001 added the Chrome adapter, ran the specs with `browser: chrome` steps, and recorded a parity table in its "Phase 3 parity results": every spec that applies to Chrome passes, and nothing needed architectural change.
 
@@ -569,3 +585,4 @@ Recorded on 2026-10-14 at commit `07bce90`.
 - 2026-10-13 — draft
 - 2026-10-14 — Chrome adapter built (RFC 0001 Phase 3)
 - 2026-10-14 — Phase D: specs for the upstream bugs this fork fixes
+- 2026-10-14 — Phase D results recorded
