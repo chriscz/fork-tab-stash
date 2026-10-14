@@ -17,7 +17,8 @@ notes: |
   app, or to DevTools), Chrome sends windows.onFocusChanged with
   WINDOW_ID_NONE and targetWindow becomes undefined, so the click opened
   nothing and logged "No target window; not sure where to restore tabs".
-  The fix opens Tab Stash in the window of the tab the user clicked from.
+  The fix opens Tab Stash in the window of the tab the user clicked from,
+  and failing that in the window the browser last focused.
   The headless browser can't move focus to another app, so the given step
   opens a second window and closes it: Chrome then reports WINDOW_ID_NONE
   and doesn't give the first window focus back. The step waits for the
@@ -33,4 +34,8 @@ notes: |
   Upstream 622bf3d has no Chrome build that loads, so the spec can't run
   there. Without the fix (this fork just before it), the then step times
   out and "no errors were logged" fails with the error above. Reverting
-  the fix is the mutation check, with the same result.
+  only e6b805b's threading of the clicked tab (its src/index.ts and
+  src/model/index.ts changes) no longer fails the spec, because 4f92764's
+  fallback to windows.getLastFocused() in restoreTabs() still finds the
+  window. Reverting both the threading and that fallback is the mutation
+  check, with the same result as without the fix.

@@ -16,11 +16,13 @@ notes: |
   model's targetWindow, which is undefined once Chrome has sent
   windows.onFocusChanged with WINDOW_ID_NONE, so the click opened nothing
   and rejected with "No target window; not sure where to restore tabs".
-  The menu handler passes that to console.log, so unlike E24's toolbar
-  click it isn't an uncaught error, and "no errors were logged" passes
-  with or without the fix: only the then step shows the bug. The fix
-  passes the clicked tab from the menu handler to show_tab, which opens
-  Tab Stash in that tab's window.
+  The menu handler catches that and passes it to logError(), which
+  reports it with console.error. The Chrome adapter doesn't count
+  console.error, so unlike E24's toolbar click it isn't an uncaught error,
+  and "no errors were logged" passes with or without the fix: only the
+  then step shows the bug. The fix passes the clicked tab from the menu
+  handler to show_tab, which opens Tab Stash in that tab's window, and
+  failing that restoreTabs() uses the window the browser last focused.
   "Show Stashed Tabs" always opens a tab, so no option is seeded:
   open_stash_in only decides what the stash and copy items show, and the
   item is labelled "Show Stashed Tabs" (showStashedTabsMenu) wherever the
@@ -34,6 +36,9 @@ notes: |
   event to the service worker with Page 1's tab, as Chrome would.
   Upstream 622bf3d has no Chrome build that loads, so the spec can't run
   there. Without the fix, the then step times out waiting for the
-  stash-list tab. Reverting the fix's threading of the clicked tab (its
-  src/index.ts and src/model/index.ts changes) is the mutation check, with
-  the same result.
+  stash-list tab. Reverting only e6b805b's threading of the clicked tab
+  (its src/index.ts and src/model/index.ts changes) no longer fails the
+  spec, because 4f92764's fallback to windows.getLastFocused() in
+  restoreTabs() still finds the window. Reverting both the threading and
+  that fallback is the mutation check, with the same result as without
+  the fix.
