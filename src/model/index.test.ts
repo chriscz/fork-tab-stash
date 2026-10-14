@@ -2291,6 +2291,28 @@ describe("model", () => {
       ).to.equal(env.tabs.real_harry.id);
     });
 
+    it("restores into the last focused window if no window is known", async () => {
+      // As in the background page, which has no window of its own, once focus
+      // has left the browser.
+      env.model.tabs.initialWindow.value = undefined;
+      env.model.tabs.focusedWindow.value = undefined;
+
+      const p = env.model.restoreTabs([{url: `${B}#harry`}], {});
+      await events.next(browser.tabs.onMoved);
+      await events.next(browser.tabs.onUpdated);
+      await events.next(browser.tabs.onActivated);
+      await events.next(browser.tabs.onHighlighted);
+      await events.next(browser.tabs.onRemoved); // closing new-tab page
+      await p;
+
+      const restored = env.model.tabs.tab(env.tabs.real_harry.id)!;
+      expect(restored.hidden).to.be.false;
+      expect(restored.active).to.be.true;
+      expect(restored.flattenedPosition?.parent.id).to.equal(
+        env.windows.real.id,
+      );
+    });
+
     it("restores a single already-open tab by switching to it", async () => {
       await env.model.restoreTabs([{url: `${B}#estelle`}], {});
       await events.next(browser.tabs.onActivated);

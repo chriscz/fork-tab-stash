@@ -16,7 +16,7 @@ import {
   urlToOpen,
   $t,
 } from "./util/index.js";
-import {logErrorsFrom} from "./util/oops.js";
+import {logError, logErrorsFrom} from "./util/oops.js";
 
 // The toolbar button's API is `action` under MV3 (Chrome) and `browserAction`
 // under MV2 (Firefox).
@@ -356,7 +356,7 @@ logErrorsFrom(async () => {
     const cmd = (<string>info.menuItemId).replace(/^[^:]*:/, "");
     console.assert(!!commands[cmd]);
     const t = tab?.id ? model.tabs.tab(tab?.id) : undefined;
-    commands[cmd](t).catch(console.log);
+    commands[cmd](t).catch(logError);
   });
 
   if (browserWakeEvents.browserActionClicked) {

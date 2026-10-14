@@ -129,6 +129,27 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   checks the toolbar button on Chrome, and E25 the tab menu's "Show
   Stashed Tabs".
 
+### Showing Tab Stash still fails when the click names no known tab
+
+- **Where:** `Model.restoreTabs()` in `src/model/index.ts`, called from the
+  menu handler in `src/index.ts`.
+- **What:** the fix above uses the window of the clicked tab, but a click
+  can name no tab the model knows. The toolbar button's right-click menu on
+  Chrome may pass no tab, and right after the service worker wakes, the
+  model may not have loaded the clicked tab yet. `restoreTabs()` then fell
+  back to `targetWindow`, which is `undefined` once focus has left the
+  browser. The menu handler also logged the failure with `console.log`, so
+  it never reached Tab Stash's error log or its crash notification.
+- **Effect:** in those cases "Show Stashed Tabs" does nothing and the
+  background logs
+  `Error: No target window; not sure where to restore tabs`. Upstream `622bf3d` has the same code (`restoreTabs()` uses only
+  `targetWindow`, and the menu handler ends in `.catch(console.log)`).
+- **Found:** reviewing the fix above, 2026-10-14.
+- **Fix:** this commit. When neither the caller nor the model names a
+  window, `restoreTabs()` asks the browser for the last focused window, and
+  fails as before only if the model doesn't know that one either. Menu
+  failures now go through `logError()`.
+
 ### Reloading the tab model loses the focused window
 
 - **Where:** `src/model/tabs.ts`, `Model.reload()`.

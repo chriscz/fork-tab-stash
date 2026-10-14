@@ -722,7 +722,13 @@ export class Model {
       ) => Promise<void>;
     },
   ): Promise<(Tabs.TabGroupExtent | Tabs.Tab)[]> {
-    const toWindow = options.toWindow ?? this.tabs.targetWindow.value;
+    let toWindow = options.toWindow ?? this.tabs.targetWindow.value;
+    if (toWindow === undefined) {
+      // We have no window of our own (e.g. we are the background page and
+      // focus has left the browser), so ask the browser which one to use.
+      const win = await browser.windows.getLastFocused();
+      if (win.id !== undefined) toWindow = this.tabs.window(win.id);
+    }
     if (toWindow === undefined) {
       throw new Error(`No target window; not sure where to restore tabs`);
     }
