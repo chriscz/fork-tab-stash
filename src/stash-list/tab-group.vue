@@ -336,8 +336,10 @@ function sort(sorter: (a: Tab, b: Tab) => number) {
 
 function stash(ev: MouseEvent) {
   the.model.attempt(async () => {
+    const tabs = stashableTabsIn(props.group.children);
+    if (tabs.length === 0) return;
     await the.model.putItemsInFolder({
-      items: copyIf(ev.altKey, stashableTabsIn(props.group.children)),
+      items: copyIf(ev.altKey, tabs),
       toFolder: await the.model.createStashFolder(props.group.group.title),
     });
   });
@@ -448,9 +450,7 @@ function dropInside(ev: ListDropInsideEvent<Tab>) {
 
 function stashableTabsIn(tabs: Tab[]): Tab[] {
   // TODO: Matches code in window.vue
-  return tabs.filter(
-    t => !t.hidden && !t.pinned && the.model.isURLStashable(t.url),
-  );
+  return tabs.filter(t => !t.pinned && the.model.isTabStashable(t));
 }
 
 function closableTabsIn(tabs: Tab[]): Tab[] {

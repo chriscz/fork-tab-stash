@@ -239,6 +239,24 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   `putItemsInFolder()` would stash, or a group holding one) and has both
   skip the stash when no item passes it. E26 checks the toolbar button.
 
+### Stashing a tab group with nothing stashable creates an empty folder
+
+- **Where:** `stash()` in `src/stash-list/tab-group.vue` (a tab group's
+  stash action in the stash list's open-tabs section).
+- **What:** it created a folder named after the group and then passed the
+  group's stashable tabs to `putItemsInFolder()`, without checking that
+  there were any. Upstream `622bf3d` has the same code.
+- **Effect:** stashing a group whose tabs are all hidden or unstashable
+  (e.g. a group holding only the Tab Stash page) adds a new, empty folder to
+  the stash.
+- **Found:** review of the "nothing to stash" fix, 2026-10-14. Reproduced
+  with E27 in Firefox and Chrome; each made one empty folder named after
+  the group.
+- **Fix:** this commit, which returns before creating the folder when no
+  tab in the group can be stashed, and has `stashableTabsIn()` use
+  `Model.isTabStashable()` so it skips exactly what `putItemsInFolder()`
+  skips. E27 checks it.
+
 ### Alt-clicking "Stash all" copies the Tab Stash page too
 
 - **Where:** `copying()` in `src/model/index.ts`, used by `stash()` in
@@ -258,6 +276,8 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Fix:** this commit's fix, which adds `Model.copyIfStashable()`: it leaves
   out the tabs `putItemsInFolder()` would skip (`Model.isTabStashable()`,
   now shared with it) before copying. E04 checks the folder's full contents.
+  Copying a tab group still copies its hidden or unstashable children, since
+  `copyIfStashable()` filters only top-level tabs.
 
 ### Removing a newly stashed bookmark leaves its hidden tab open
 

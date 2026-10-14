@@ -1,0 +1,27 @@
+id: E27
+title: Stashing a tab group with nothing to stash creates no folder
+upstream-bug: Stashing a tab group with nothing stashable creates an empty folder
+given:
+  - The stash list's own tab is in a tab group named "Reading", and the stash is empty.
+when:
+  - The user clicks the stash action on "Reading" in the open-tabs section of the stash list.
+then:
+  - No folder appears in the stash.
+  - The stash list's tab is still in "Reading".
+notes: |
+  The group's stash action runs stash() in src/stash-list/tab-group.vue.
+  It created a folder named after the group and then passed the group's
+  stashable tabs (stashableTabsIn()) to putItemsInFolder(), without
+  checking that there were any. Here the group holds only the stash
+  list's own tab, which is never stashable, so the click made an empty
+  "Reading" folder. The fix returns before creating the folder when no
+  tab in the group can be stashed.
+  The given step groups the test's own tab with browser.tabs.group and
+  names the group with browser.tabGroups.update, as the user would from
+  the tab strip. A named group gives the row a title to find it by.
+  Nothing tells the test that the click has finished, so the then step
+  waits a fixed second (as E26 does) before checking that no folder
+  appeared. Without the fix the folder appears well within that second.
+  Upstream 622bf3d has the same code. Without the fix, "No folder appears
+  in the stash" fails with one empty "Reading" folder. Removing the fix's
+  early return is the mutation check, with the same result.
