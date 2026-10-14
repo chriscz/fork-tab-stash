@@ -126,7 +126,8 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   Chrome reports `WINDOW_ID_NONE` and gives no window focus.
 - **Fix:** this commit, which gives `restoreTabs()` a `toWindow` option and
   has those commands pass the window of the tab the user clicked from. E24
-  checks the toolbar button on Chrome.
+  checks the toolbar button on Chrome, and E25 the tab menu's "Show
+  Stashed Tabs".
 
 ### Reloading the tab model loses the focused window
 
