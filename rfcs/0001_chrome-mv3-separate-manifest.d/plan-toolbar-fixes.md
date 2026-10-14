@@ -72,3 +72,12 @@
 - [ ] Spec E25 (both browsers, `upstream-bug: <TASKS.md heading>`): given the toolbar is set to stash all and the window holds only a pinned page and the Tab Stash page, when the user clicks the toolbar button, then no new folder appears in the stash. Positive control: the stash is unchanged and no error is logged. Fails before the fix.
 - [ ] Fix at the source: filter with `isTabStashable` (Phase D's helper) before the emptiness check, so nothing is created when nothing would be stashed. Check the page's own "Stash all" (`window.vue`) for the same.
 - [ ] Add RFC 0002's catalogue row for E25.
+
+---
+
+## Deviations
+
+- **E25** was added for the tab menu's "Show Stashed Tabs" route. Like E24, it is Chrome-only.
+- **A further fix:** when no window is known, `restoreTabs()` falls back to the browser's last focused window, and menu errors go through `logError()`.
+- **The empty-folder spec** became E26, not E25.
+- **Two related empty-folder bugs** were fixed: stashing a tab group (E27), and "Stash This Tab to a New Group" on the Tab Stash tab (E28).

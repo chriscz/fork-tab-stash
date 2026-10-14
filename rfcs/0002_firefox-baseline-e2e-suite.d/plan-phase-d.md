@@ -129,3 +129,13 @@ Subtests inherit nothing from `todo`, so check how node:test reports a failing s
 - [ ] Run Firefox ×3, Chrome ×3, `--ref=622bf3d` ×1; all green (todo specs reported, not failing).
 - [ ] Add "Phase D results" to RFC 0002 after "Phase B and C results": the bugs fixed (commit, test, step that fails on `622bf3d`), run counts and times. Commit `docs(rfc-0002): record the Phase D results`.
 - [ ] Final whole-stack review, as in earlier phases.
+
+---
+
+## Deviations
+
+- **Task 1:** the runner's signal for a reference build is `E2E_REF_SHA`, not `E2E_REF`. Make exports command-line variables to every recipe, so `E2E_REF` is set in every run started with it, not only reference runs.
+- **Task 2** fixed two flaky filter tests, not one.
+- **Task 5** was redone. The watchers were dead and also redundant: the options that would trigger them are disabled on the page. So E22 tests that rule instead, and the watchers were removed.
+- **Task 6** added harness methods: `clickTabMenuItem()` and `closeSidebar()` to act, and `popups()` and `sidebarOpen()` to check the result. E23 seeds a legacy `open_stash_in` value of `"popup"`, since no release offers it.
+- **Follow-up:** a new open bug in `TASKS.md`, "Showing the popup clears the toolbar button's popup". It has no visible effect with Firefox 157's defaults.

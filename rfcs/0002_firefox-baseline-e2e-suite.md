@@ -49,7 +49,7 @@ Chrome needs none of these workarounds: Puppeteer's `page.goto`, `page.evaluate`
 **Upstream bugs found while surveying.** None of these may be encoded as expected behaviour; both are tracked in [`TASKS.md`](../TASKS.md):
 
 - **Popup fall-through.** `show_something`'s `"popup"` case has no `break`, so showing the popup also opens the sidebar.
-- **Options watchers.** The coupling watchers in `src/options/index.vue:528` watch top-level keys that don't exist, so they never fire. They are also redundant: the options that would trigger them are disabled.
+- **Options watchers.** The coupling watchers in `src/options/index.vue:528` (removed in Phase D) watch top-level keys that don't exist, so they never fire. They are also redundant: the options that would trigger them are disabled.
 
 ## Goals
 

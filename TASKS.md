@@ -26,9 +26,9 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   in `src/model/options.ts`). Chrome's `action.openPopup()` needs no gesture
   either, so by reading it behaves the same. Where that pref is `false`, the
   button stops opening the popup after the clear, but there the menu command
-  that clears it doesn't open the popup either. Reaching `show_popup` at all needs
-  `open_stash_in` set to `"popup"`, which no release offers (see "Showing
-  the popup also opens the sidebar" below).
+  that clears it doesn't open the popup either. Reaching `show_popup` at all
+  needs `open_stash_in` set to `"popup"`, which no release offers (see
+  "Showing the popup also opens the sidebar" below).
 - **Found:** review of the fix for "Showing the popup also opens the
   sidebar", 2026-10-14. Probed in Firefox 157.0.1 with both options set to
   `"popup"`: before the menu command `browserAction.getPopup({})` returned
@@ -141,14 +141,17 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   browser. The menu handler also logged the failure with `console.log`, so
   it never reached Tab Stash's error log or its crash notification.
 - **Effect:** in those cases "Show Stashed Tabs" does nothing and the
-  background logs
-  `Error: No target window; not sure where to restore tabs`. Upstream `622bf3d` has the same code (`restoreTabs()` uses only
+  background logs `Error: No target window; not sure where to restore tabs`.
+  Upstream `622bf3d` has the same code (`restoreTabs()` uses only
   `targetWindow`, and the menu handler ends in `.catch(console.log)`).
 - **Found:** reviewing the fix above, 2026-10-14.
 - **Fix:** this commit. When neither the caller nor the model names a
   window, `restoreTabs()` asks the browser for the last focused window, and
   fails as before only if the model doesn't know that one either. Menu
-  failures now go through `logError()`.
+  failures now go through `logError()`. Only a unit test in
+  `src/model/index.test.ts` covers the fallback. There is no e2e spec,
+  because a click with no tab, or with a tab the model doesn't know right
+  after a wake, can't be produced on demand.
 
 ### Reloading the tab model loses the focused window
 
@@ -335,7 +338,7 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 ### Showing the popup also opens the sidebar
 
 - **Where:** `src/index.ts`, the `"popup"` case of `show_something()`
-  (`src/index.ts:295`).
+  (`src/index.ts:296-298`).
 - **What:** the case had no `break`, so after `commands.show_popup` it fell
   through to `case "sidebar"` and also ran `commands.show_sidebar_or_tab`.
 - **Effect:** wherever `show_something("popup")` runs, Firefox shows the popup
@@ -343,9 +346,10 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   stash-list tab instead. It runs for a menu command, or a click on the
   address bar's page action (which runs the same `stash_one` command), when
   `open_stash_in` is `"popup"`, and for a toolbar click when
-  `browser_action_show` is `"popup"` but the button has no popup set. No release offers `"popup"` for `open_stash_in`
-  (only development builds between `1e578cd` and `9a8922a`, February 2021),
-  but the model still honours a stored value. The button loses its popup
+  `browser_action_show` is `"popup"` but the button has no popup set. No
+  release offers `"popup"` for `open_stash_in` (only development builds
+  between `1e578cd` and `9a8922a`, February 2021), but the model still
+  honours a stored value. The button loses its popup
   because `show_popup` clears it after opening the popup, so once a command
   has shown it, every toolbar click opens the sidebar too, until an option
   changes. A click before the background sets the popup at startup should do
