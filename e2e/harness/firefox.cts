@@ -187,9 +187,17 @@ async function launchAdapter({dist}: {dist: string}) {
             ]).finally(() => clearTimeout(timer));
           };
           try {
+            // The menu acts on the tab its trigger event targets, and on the
+            // selected tab when there is none, so hand it an event that has
+            // been dispatched on the tab.
+            const trigger = new Event("e2e-tab-menu");
+            tab.dispatchEvent(trigger);
             const opened = event(menu, "popupshown", "The tab menu didn't open");
-            menu.openPopup(tab, "after_start", 0, 0, true, false, null);
+            menu.openPopup(tab, "after_start", 0, 0, true, false, trigger);
             await opened;
+            if (TabContextMenu.contextTab !== tab) {
+              throw new Error("The tab menu opened for another tab than " + url);
+            }
             const items = [...menu.querySelectorAll("menuitem")]
               .filter(m => !m.hidden && !m.disabled && m.hasAttribute("label"));
             const item = items.find(m => m.getAttribute("label") === label);
