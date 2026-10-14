@@ -55,13 +55,42 @@ welcome). Here's what you need to do:
 4. You'll get the following artifacts:
    - `dist`: The unpacked Firefox extension
 
-   - `dist-chrome`: A highly-experimental port to Chrome (also unpacked)
+   - `dist-chrome`: A highly-experimental Manifest V3 port to Chrome 148 or
+     newer (also unpacked). `make pkg-chrome` packs a release build of it.
 
    - (release builds only) `releases/tab-stash-X.XX-hhhhhhh.zip`: The packed
      Firefox extension (this is what gets uploaded to AMO)
 
    - (release builds only) `releases/tab-stash-src-X.XX-hhhhhhh.tar.gz`: A clean
      git checkout of the source tree for the release (also for uploading to AMO)
+
+### Building with Docker
+
+If you have Docker, you can skip installing dependencies. The provided
+`Dockerfile` builds an Ubuntu image with everything `install-deps.sh` installs.
+Your source tree is mounted into the container, so build artifacts end up in the
+same places as above:
+
+```sh
+bin/dev image build   # build (or rebuild) the image
+bin/dev run make      # or `make rel` for a release version
+bin/dev shell         # open a temporary shell in the container
+```
+
+`bin/dev run make check-e2e` runs the end-to-end tests in Chrome and Firefox.
+They are supported only inside the dev Docker image (on macOS, use Colima or a
+similar Docker runtime).
+
+Run `bin/dev help` to see all commands.
+
+To use Docker directly instead of `bin/dev`:
+
+```sh
+docker build -t tab-stash-dev .
+docker run --rm -it -u "$(id -u):$(id -g)" -v "$PWD":/src tab-stash-dev make
+```
+
+Replace `make` with `make rel` to build a release version.
 
 ## Want to help out?
 

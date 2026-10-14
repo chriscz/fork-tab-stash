@@ -302,6 +302,26 @@ describe("model", () => {
     });
   });
 
+  describe("stashes all tabs in a window", () => {
+    it("creates no folder when no tab in the window can be stashed", async () => {
+      // Leaves the small window with a pinned tab, the Tab Stash page and a
+      // hidden tab, none of which a stash takes.
+      await browser.tabs.update(env.tabs.small_active.id, {
+        url: browser.runtime.getURL("stash-list.html"),
+      });
+      await events.nextN(browser.tabs.onUpdated, 2);
+      const before = env.model.bookmarks.stash_root.value!.children.length;
+
+      const win = env.model.tabs.window(env.windows.small.id)!;
+      await env.model.stashAllTabsInWindow(win, {});
+
+      expect(env.model.bookmarks.stash_root.value!.children.length).to.equal(
+        before,
+      );
+      expect(events.pendingCount()).to.equal(0);
+    });
+  });
+
   describe("hides or closes stashed tabs", () => {
     describe("according to user settings", () => {
       it("hides tabs but keeps them loaded", async () => {
@@ -1065,6 +1085,65 @@ describe("model", () => {
         folder.children.map(c => c?.type === "bookmark" && c.url),
         "Model bookmark URLs",
       ).to.deep.equal(urls);
+    });
+
+    it("puts tabs at toIndex even if it skips earlier tabs", async () => {
+      const p = env.model.putItemsInFolder({
+        items: [
+          env.model.tabs.tab(env.tabs.real_harry.id)!, // hidden, so skipped
+          env.model.tabs.tab(env.tabs.real_bob.id)!,
+        ],
+        toFolder: env.model.bookmarks.folder(env.bookmarks.names.id)!,
+        toIndex: 2,
+      });
+      await events.next(browser.bookmarks.onCreated);
+      await events.next(browser.tabs.onUpdated);
+      await p;
+
+      const real_folder = await browser.bookmarks.getChildren(
+        env.bookmarks.names.id,
+      );
+      expect(real_folder.map(c => c.title)).to.deep.equal([
+        "Doug Duplicate",
+        "Helen Hidden",
+        `${B}#bob`,
+        "Patricia Pinned",
+        "Nate NotOpen",
+      ]);
+    });
+
+    it("copies only the tabs a move would stash", async () => {
+      const stash_page = await browser.tabs.create({
+        windowId: env.windows.real.id,
+        url: browser.runtime.getURL("stash-list.html"),
+        active: false,
+      });
+      await events.next(browser.tabs.onCreated);
+      await events.next(browser.tabs.onUpdated); // loaded
+
+      const p = env.model.putItemsInFolder({
+        items: env.model.copyIfStashable(true, [
+          env.model.tabs.tab(stash_page.id as TabID)!, // unstashable URL
+          env.model.tabs.tab(env.tabs.real_harry.id)!, // hidden
+          env.model.tabs.tab(env.tabs.real_bob.id)!,
+        ]),
+        toFolder: env.model.bookmarks.folder(env.bookmarks.names.id)!,
+        toIndex: 2,
+      });
+      await events.next(browser.bookmarks.onCreated);
+      await p;
+
+      const real_folder = await browser.bookmarks.getChildren(
+        env.bookmarks.names.id,
+      );
+      expect(real_folder.map(c => c.url)).to.deep.equal([
+        `${B}#doug`,
+        `${B}#helen`,
+        `${B}#bob`,
+        `${B}#patricia`,
+        `${B}#nate`,
+      ]);
+      expect(env.model.tabs.tab(env.tabs.real_bob.id)!.hidden).to.be.false;
     });
 
     it("moves tabs and bookmarks into the folder", async () => {
@@ -2230,6 +2309,28 @@ describe("model", () => {
       expect(
         win.flattenedChildren[win.flattenedChildren.length - 1].id,
       ).to.equal(env.tabs.real_harry.id);
+    });
+
+    it("restores into the last focused window if no window is known", async () => {
+      // As in the background page, which has no window of its own, once focus
+      // has left the browser.
+      env.model.tabs.initialWindow.value = undefined;
+      env.model.tabs.focusedWindow.value = undefined;
+
+      const p = env.model.restoreTabs([{url: `${B}#harry`}], {});
+      await events.next(browser.tabs.onMoved);
+      await events.next(browser.tabs.onUpdated);
+      await events.next(browser.tabs.onActivated);
+      await events.next(browser.tabs.onHighlighted);
+      await events.next(browser.tabs.onRemoved); // closing new-tab page
+      await p;
+
+      const restored = env.model.tabs.tab(env.tabs.real_harry.id)!;
+      expect(restored.hidden).to.be.false;
+      expect(restored.active).to.be.true;
+      expect(restored.flattenedPosition?.parent.id).to.equal(
+        env.windows.real.id,
+      );
     });
 
     it("restores a single already-open tab by switching to it", async () => {

@@ -18,6 +18,7 @@ RELEASE_DIR = releases
 SRCPKG_DIR = $(PACKAGE)-src-$(FULL_VERSION)
 SRC_PKG = $(RELEASE_DIR)/$(SRCPKG_DIR).tar.gz
 DIST_PKG = $(RELEASE_DIR)/$(PACKAGE)-$(FULL_VERSION).zip
+CHROME_PKG = $(RELEASE_DIR)/$(PACKAGE)-chrome-$(FULL_VERSION).zip
 
 # Primary (user-facing) targets.
 
@@ -50,6 +51,58 @@ check-style: node_modules
 check-i18n: node_modules check-i18n.js
 	node check-i18n.js
 .PHONY: check-i18n
+
+# Not part of `check`: these need Puppeteer and the browsers from
+# install-test-deps.sh.
+check-e2e: check-e2e-chrome check-e2e-firefox
+.PHONY: check-e2e
+
+check-e2e-chrome: build-chrome-dbg
+	node --test e2e/chrome.test.cjs
+	TZ=UTC E2E_BROWSER=chrome E2E_DIST=dist-chrome node --test $(E2E_SPECS)
+.PHONY: check-e2e-chrome
+
+E2E_DIST ?= dist
+# Narrows a run to some suites, e.g. E2E_SPECS='e2e/tests/e01-*/suite.cts'.
+E2E_SPECS ?= e2e/tests/*/suite.cts
+
+check-e2e-firefox: build-dbg
+	TZ=UTC E2E_BROWSER=firefox E2E_DIST=$(E2E_DIST) node --test e2e/harness/runner.test.cts $(E2E_SPECS)
+.PHONY: check-e2e-firefox
+
+# Builds E2E_REF once (cached per resolved commit, inside the bind-mounted repo
+# so it survives between containers) and runs this checkout's tests against that
+# build in E2E_BROWSER.  node_modules/ is gitignored, so git and Prettier skip
+# the cache.  The cache is keyed by the full hash so a branch name or HEAD can't
+# go stale, and a build only counts once its .e2e-built-<target> marker exists:
+# the output directory appears early, so an interrupted build would otherwise be
+# reused as if it were complete.  The marker is per build target, so a commit's
+# Firefox and Chrome builds share one clone and are cached side by side.  A
+# commit from before Chrome could load the extension still builds, but Chrome
+# rejects it and the run fails at launch.  The tests get the resolved commit as
+# E2E_REF_SHA, so specs with an upstream-bug key run as todo there.  It isn't
+# E2E_REF because make exports command-line variables to every recipe, and a
+# working-tree run must never treat those specs as todo.
+E2E_BROWSER ?= firefox
+
+check-e2e-ref:
+	@test -n "$(E2E_REF)" || { echo "Set E2E_REF=<commit>" >&2; exit 1; }
+	@case "$(E2E_BROWSER)" in \
+	  firefox) build=build-dbg; out=dist ;; \
+	  chrome) build=build-chrome-dbg; out=dist-chrome ;; \
+	  *) echo "E2E_BROWSER must be firefox or chrome" >&2; exit 1 ;; \
+	esac; \
+	sha="$$(git rev-parse --verify --quiet "$(E2E_REF)^{commit}")" || { \
+	  echo "E2E_REF does not resolve to a commit: $(E2E_REF)" >&2; exit 1; }; \
+	dir="node_modules/.cache/e2e-ref/$$sha"; \
+	test -e "$$dir/.e2e-built-$$build" || ( \
+	  { test -d "$$dir/.git" || { rm -rf "$$dir" && git clone --quiet . "$$dir"; }; } && \
+	  git -C "$$dir" checkout --quiet "$$sha" && \
+	  $(MAKE) -C "$$dir" $$build && \
+	  touch "$$dir/.e2e-built-$$build" ) && \
+	TZ=UTC E2E_BROWSER=$(E2E_BROWSER) E2E_DIST="$$dir/$$out" E2E_REF_SHA="$$sha" \
+	  node --test $(E2E_SPECS)
+.PHONY: check-e2e-ref
 
 fix-style: node_modules
 	./node_modules/.bin/prettier --ignore-path .gitignore --write .
@@ -106,6 +159,11 @@ pkg-webext: clean-working-tree build-rel
 	cd dist && zip -9rvo ../$(DIST_PKG) `find . -type f`
 .PHONY: pkg-webext
 
+pkg-chrome: clean-working-tree build-chrome-rel
+	mkdir -p $(RELEASE_DIR)
+	cd dist-chrome && zip -9rvo ../$(CHROME_PKG) `find . -type f`
+.PHONY: pkg-chrome
+
 pkg-source: clean-working-tree
 	mkdir -p $(RELEASE_DIR)
 	rm -rf $(RELEASE_DIR)/$(SRCPKG_DIR) $(SRC_PKG)
@@ -141,6 +199,14 @@ build-chrome-dbg: build-dbg
 		exit 1 \
 	)
 .PHONY: build-chrome-dbg
+
+build-chrome-rel: build-rel
+	rsync -aHvx --delete --force dist/ dist-chrome/
+	node ./patch-manifest-for-chrome.js >dist-chrome/manifest.json || (\
+		rm -f dist-chrome/manifest.json; \
+		exit 1 \
+	)
+.PHONY: build-chrome-rel
 
 build-dbg: node_modules icons dist/tab-stash.css
 	NODE_ENV=development ./node_modules/.bin/vite build -c vite.config.html.ts -m development
@@ -222,7 +288,7 @@ site:
 
 distclean: clean
 	rm -rf node_modules docs/vendor \
-		$(RELEASE_DIR)/$(SRCPKG_DIR) $(SRC_PKG) $(DIST_PKG) \
+		$(RELEASE_DIR)/$(SRCPKG_DIR) $(SRC_PKG) $(DIST_PKG) $(CHROME_PKG) \
 		releases/*-dirty* releases/*-dev*
 .PHONY: distclean
 

@@ -284,7 +284,11 @@ export class Model {
       trace("(Re-)loading the model");
 
       const cur_win = await browser.windows.getCurrent();
-      this.focusedWindow.value = cur_win.id as WindowID;
+      // The window may already be in the model (e.g. when reloading to
+      // recover from an error), in which case whenWindowCreated() won't run
+      // again to swap the ID for the window object.
+      this.focusedWindow.value =
+        this.window(cur_win.id!) ?? (cur_win.id as WindowID);
 
       let tabs = await browser.tabs.query({});
 
@@ -448,6 +452,10 @@ export class Model {
       windowId: flat_pos.parent.id,
       index: flat_pos.index,
     };
+
+    // Chrome has no containers, and rejects unknown keys even when their value
+    // is undefined.
+    if (create_tab.cookieStoreId === undefined) delete create_tab.cookieStoreId;
 
     if (
       !browser.tabs.hide ||

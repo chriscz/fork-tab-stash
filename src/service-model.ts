@@ -12,7 +12,10 @@ import {listen} from "./util/nanoservice/index.js";
 import * as M from "./model/index.js";
 
 export default async function (): Promise<M.Model> {
-  const kvs = await resolveNamed({
+  // Register the store services before the first await, so a page that
+  // connects to a freshly-started (Chrome MV3) service worker finds them
+  // listening.
+  const kvs = {
     deleted_items: KVSService.open<string, M.DeletedItems.SourceValue>(
       "deleted_items",
       "deleted_items",
@@ -25,7 +28,10 @@ export default async function (): Promise<M.Model> {
       string,
       M.BookmarkMetadata.BookmarkMetadata
     >("bookmark-metadata", "bookmark-metadata"),
-  });
+  };
+  listen("deleted_items", kvs.deleted_items);
+  listen("favicons", kvs.favicons);
+  listen("bookmark-metadata", kvs.bookmark_metadata);
 
   const sources = await resolveNamed({
     browser_settings: M.BrowserSettings.Model.live(),
@@ -35,10 +41,6 @@ export default async function (): Promise<M.Model> {
     bookmarks: M.Bookmarks.Model.from_browser(),
     deleted_items: new M.DeletedItems.Model(kvs.deleted_items),
   });
-
-  listen("deleted_items", kvs.deleted_items);
-  listen("favicons", kvs.favicons);
-  listen("bookmark-metadata", kvs.bookmark_metadata);
 
   const model = new M.Model({
     ...sources,

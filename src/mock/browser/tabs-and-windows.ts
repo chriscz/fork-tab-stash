@@ -357,11 +357,13 @@ class MockWindows implements W.Static {
     return only_win(win);
   }
 
-  /* c8 ignore start -- not implemented */
   async getLastFocused(getInfo?: W.GetInfo): Promise<W.Window> {
-    throw new Error("Method not implemented.");
+    // The mock never takes focus away from every window, so the last focused
+    // window is the focused one.
+    return this.getCurrent(getInfo);
   }
 
+  /* c8 ignore start -- not implemented */
   async getAll(getInfo?: W.GetAllGetInfoType): Promise<W.Window[]> {
     throw new Error("Method not implemented.");
   }

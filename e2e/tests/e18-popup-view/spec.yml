@@ -1,0 +1,33 @@
+id: E18
+title: The popup view renders
+given:
+  - The stash has a folder "Reading" with Page 1 and Page 2.
+when:
+  - The user opens the stash list in its popup view.
+then:
+  - The page is in the popup view and the stash list renders.
+  - step: The popup view shows "Reading" with its two pages.
+    screenshot:
+      name: popup-view
+      mask:
+        - div.search-input > input[type=search]
+notes: |
+  ?view=popup sets html[data-view=popup] (src/launch-vue.ts), and the
+  popup's layout (a fixed-width body, styles/base.less) follows it. The
+  driver renders the view in a normal tab, so the screenshot shows that
+  body at the left of the 1000x700 viewport.
+  In the popup and sidebar views the stash list focuses its search box about
+  50 ms after mounting (mounted() in src/stash-list/index.vue), and a focused
+  box shows a blinking caret. The screenshot step waits until the box has
+  focus, so the image never races the focus change, and masks the input so
+  the caret's blink phase can't change the image. The mask covers only
+  the input; its frame and focus ring stay visible, and are the same in
+  every capture once focus is waited for. The buttons either side of it
+  stay visible.
+  No folder or page shows a date, so nothing else is masked. The golden
+  includes the footer's version, so a version bump means regenerating it
+  from the baseline.
+  Mutation check: in src/launch-vue.ts:35, delete
+  `document.documentElement.dataset!.view = the.view;`; html has no
+  data-view, so "The page is in the popup view" fails, and so does the
+  screenshot step, since the body is no longer popup-width.

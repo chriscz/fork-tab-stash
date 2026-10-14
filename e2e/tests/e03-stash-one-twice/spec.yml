@@ -1,0 +1,25 @@
+id: E03
+title: Stash one tab, twice
+given:
+  - Three local pages are open in the window, and the stash is empty.
+when:
+  - The user clicks "Stash this tab" on Page 1 in the open-tabs list.
+  - The user clicks "Stash this tab" on Page 2 in the open-tabs list.
+then:
+  - Page 1 and Page 2 are bookmarked in the same, single stash folder.
+  - step: Page 1 and Page 2 are hidden, and Page 3 is still visible.
+    browser: firefox
+  - step: Page 1 and Page 2 are closed, and Page 3 is still open.
+    browser: chrome
+notes: |
+  "Stash this tab" puts the tab in the default folder; a second stash within
+  new_folder_timeout_min (5 minutes) reuses that folder.
+  Open-tab rows are div.forest-item[title=<tab title>] inside
+  ul.forest.one-column; their stash link has class exactly "action stash one".
+  Each when step waits for its bookmark before ending.
+  Mutation check: in src/model/index.ts:420, replace the condition
+  `topmost.dateAdded! < age_cutoff` with `true` (`if (true)`), so the default
+  folder is never reused; the "same, single stash folder" step fails.
+  Chrome mutation check: in src/model/tabs.ts:664, replace
+  `await this.remove(tabs);` with `// await this.remove(tabs);`, so stashed
+  tabs stay open; "Page 1 and Page 2 are closed" fails.

@@ -1,0 +1,33 @@
+id: E05
+title: Restoring a bookmark reuses its hidden tab
+given:
+  - Three pages were stashed with "Stash all".
+when:
+  - The user clicks Page 1's bookmark in the stash list.
+then:
+  - step: Page 1's original tab is visible again, and Tab Stash's hidden mark is removed.
+    browser: firefox
+  - step: A new tab opens with Page 1 and becomes the active tab.
+    browser: chrome
+  - Exactly one tab shows Page 1, and its bookmark is still in the stash.
+notes: |
+  Restoring a URL prefers an unpinned hidden tab with the same URL
+  (moveLeaf in src/model/index.ts), so on Firefox the tab id is unchanged.
+  The hidden mark is cleared when the browser reports the tab shown, a moment
+  after the tab is visible, so the step waits for it.
+  The bookmark's title link is div.forest-item[title="Page 1"] a.forest-title
+  inside the stash folder (not the open-tabs list). The folder's displayed
+  title is a friendly date rather than its bookmark title, so the suite reads
+  it from the folder row's span.forest-title.editable.
+  A hidden tab is still in its window, so moveLeaf's
+  `t.position?.parent === to_parent` alone already matches it; only
+  excluding hidden tabs outright stops the reuse.
+  Mutation check: in src/model/index.ts:1105, replace
+  `(t.hidden || t.position?.parent === to_parent)` with
+  `!t.hidden && t.position?.parent === to_parent`, so moveLeaf never reuses
+  hidden tabs; the "original tab is visible again" step fails.
+  On Chrome, stashing closed the tabs, so restoring opens a new one.
+  Chrome mutation check: in src/stash-list/bookmark.vue:216, replace
+  `{background: bg}` with `{background: true}`, so restoreTabs never
+  activates the new tab; only "A new tab opens with Page 1 and becomes the
+  active tab" fails.

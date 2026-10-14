@@ -1,0 +1,44 @@
+id: E23
+title: Showing the popup doesn't also open the sidebar
+browser: firefox
+upstream-bug: Showing the popup also opens the sidebar
+given:
+  - The toolbar button shows the popup, and stashing from a menu is set to show the popup too.
+  - Page 1 is open and the sidebar is closed.
+when:
+  - The user picks "Stash This Tab" from Page 1's tab menu.
+then:
+  - Tab Stash's popup is shown.
+  - The sidebar stays closed.
+notes: |
+  Firefox-only: Chrome has no sidebar, and its extensions can't add to the
+  tab's context menu.
+  Every menu command and the toolbar button show Tab Stash through
+  show_something() in src/index.ts, with the choice in open_stash_in
+  (menus) or browser_action_show (toolbar). While the toolbar is set to the
+  popup, the background sets the button's popup, so a toolbar click opens
+  it natively and never reaches show_something(). The "popup" case is
+  reached two ways:
+  - open_stash_in is "popup". No release has offered that choice: only
+    development builds between 1e578cd and 9a8922a (February 2021) did.
+    The model still accepts and honours the stored value, so this spec
+    seeds it, as the only way to reach the case on demand.
+  - A toolbar click reaches onClicked while the button has no popup set.
+    show_popup clears it after opening the popup, so once any command has
+    shown the popup, every toolbar click shows the popup and the sidebar
+    until an option changes and the background sets the popup again. A
+    click before the background has set the popup at startup would do
+    the same (found by reading, not reproduced). Neither can be reached
+    on demand without the first way, so this spec doesn't use the
+    toolbar.
+  Firefox delivers menus.onClicked as user input, so the background may
+  open the popup and the sidebar from it. The driver picks the item from
+  the tab's real context menu, from the chrome context.
+  Firefox opens an add-on's sidebar when it is installed, so the given step
+  closes it first, as the user would.
+  The popup step waits for the popup's page to start. The sidebar step
+  comes after it: the buggy build asks for the sidebar in the same click
+  handler, before the popup even opens, so by then the sidebar is open.
+  On 622bf3d "The sidebar stays closed" fails: the "popup" case has no
+  break, so it falls through and also opens the sidebar. Reverting the fix
+  is the mutation check, with the same result.

@@ -1,5 +1,6 @@
 import {expect} from "chai";
 import {openDB} from "idb";
+import type {IDBPDatabase} from "idb";
 
 import * as events from "../../mock/events.js";
 import * as NS from "../../util/nanoservice/index.js";
@@ -20,6 +21,30 @@ async function kvs_factory(): Promise<Service<string, string>> {
 
 describe("datastore/kvs/service", function () {
   describe("implements KeyValueStore", () => tests(kvs_factory));
+
+  it("serves requests made before the database finishes opening", async () => {
+    NS.registry.reset_testonly();
+    let opened!: (db: IDBPDatabase) => void;
+    const svc = new Service<string, string>(
+      new Promise<IDBPDatabase>(r => (opened = r)),
+      "test",
+    );
+
+    const written = svc.set([{key: "early", value: "bird"}]);
+    opened(
+      await openDB("test-pending-open", 1, {
+        upgrade(db) {
+          db.createObjectStore("test");
+        },
+      }),
+    );
+    await written;
+    await events.next(svc.onSet);
+
+    expect(await svc.get(["early"])).to.deep.equal([
+      {key: "early", value: "bird"},
+    ]);
+  });
 
   describe("broadcasts object updates to clients", async () => {
     let client: MockPort;

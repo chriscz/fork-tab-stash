@@ -1,0 +1,20 @@
+id: E11
+title: Rename a folder
+given:
+  - The stash has a folder "Reading" with Page 1.
+when:
+  - The user clicks the title "Reading", types "Later" and presses Enter.
+then:
+  - The folder is now called "Later" in the bookmarks.
+notes: |
+  Clicking the folder's title (div.forest-item.folder >
+  span.forest-title.editable) swaps it for an <input> with the same classes
+  (src/components/async-text-input.vue), so the input is
+  div.forest-item.folder > input.forest-title.editable. It commits on Enter
+  (keyup) or blur, and stops key events from bubbling, so the key is pressed
+  on the input itself. While renaming, the row has no title text, so
+  clickInFolder can't find it; the stash has only one folder, so the
+  selector alone picks the one input.
+  Mutation check: in src/components/async-text-input.vue:16, delete the line
+  `@keyup.enter.prevent.stop="commit"`; nothing blurs the input, so the
+  rename is never saved and "now called Later" fails.

@@ -1,0 +1,44 @@
+id: E25
+title: The tab menu shows Tab Stash after focus has left the window
+browser: chrome
+upstream-bug: Showing Tab Stash fails once focus leaves the browser
+given:
+  - The user is on Tab Stash's options page, with Page 1 open in another tab.
+  - The user opened a second window and closed it, so no window has focus.
+when:
+  - The user picks "Show Stashed Tabs" from Page 1's tab menu.
+then:
+  - A tab showing the stash list opens in the user's window.
+notes: |
+  The same bug as E24, reached from the menu instead of the toolbar
+  button. "Show Stashed Tabs" runs show_tab in src/index.ts, which opens
+  Tab Stash with restoreTabs() (src/model/index.ts). That used the tab
+  model's targetWindow, which is undefined once Chrome has sent
+  windows.onFocusChanged with WINDOW_ID_NONE, so the click opened nothing
+  and rejected with "No target window; not sure where to restore tabs".
+  The menu handler catches that and passes it to logError(), which
+  reports it with console.error. The Chrome adapter doesn't count
+  console.error, so unlike E24's toolbar click it isn't an uncaught error,
+  and "no errors were logged" passes with or without the fix: only the
+  then step shows the bug. The fix passes the clicked tab from the menu
+  handler to show_tab, which opens Tab Stash in that tab's window, and
+  failing that restoreTabs() uses the window the browser last focused.
+  "Show Stashed Tabs" always opens a tab, so no option is seeded:
+  open_stash_in only decides what the stash and copy items show, and the
+  item is labelled "Show Stashed Tabs" (showStashedTabsMenu) wherever the
+  browser has no sidebar.
+  The focus steps are E24's; see its notes for why they make Chrome
+  report WINDOW_ID_NONE and why the spec is Chrome-only. The options page
+  is open in the test's tab so that the stash list isn't already open in
+  the window; restoreTabs() would only switch to it.
+  Chrome doesn't let extensions add to the tab's menu, so there the item
+  is in the page's context menu, and the driver sends the menu's click
+  event to the service worker with Page 1's tab, as Chrome would.
+  Upstream 622bf3d has no Chrome build that loads, so the spec can't run
+  there. Without the fix, the then step times out waiting for the
+  stash-list tab. Reverting only e6b805b's threading of the clicked tab
+  (its src/index.ts and src/model/index.ts changes) no longer fails the
+  spec, because 4f92764's fallback to windows.getLastFocused() in
+  restoreTabs() still finds the window. Reverting both the threading and
+  that fallback is the mutation check, with the same result as without
+  the fix.

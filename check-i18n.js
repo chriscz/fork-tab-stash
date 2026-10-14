@@ -90,15 +90,15 @@ function readAllMessages(tree) {
 /** Given a locale message key, split it into its stem and plural parts.
  *
  * A singular message is just the stem (i.e. `[stem, ""]`), while a plural
- * message is of the form `[stem, plural]`, where plural is one of "zero",
- * "one", "two", "few", "many", or "other".
+ * message is of the form `[stem, plural]` (the key is `stem_plural`), where
+ * plural is one of "zero", "one", "two", "few", "many", or "other".
  *
  * @param {string} key - The message key to split.
  * @returns {[string, string]} A tuple of [stem, plural], where plural is one of
  * "", "zero", "one", "two", "few", "many", or "other".
  */
 function splitMsgKey(key) {
-  const match = key.match(/^(.*?)(?:\.(zero|one|two|few|many|other))?$/);
+  const match = key.match(/^(.*?)(?:_(zero|one|two|few|many|other))?$/);
   if (!match) {
     throw new Error(`Invalid message key: ${key}`);
   }

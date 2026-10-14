@@ -1,0 +1,25 @@
+id: E19
+title: Restore a folder from Deleted Items
+given:
+  - A folder "Old" with Page 1 and Page 2 was deleted.
+when:
+  - The user clicks "Restore" on "Old" in Deleted Items.
+then:
+  - '"Old" is back in the stash with Page 1 and Page 2.'
+  - Deleted Items no longer lists "Old".
+notes: |
+  The restore link on a deleted item has class exactly "action stash one"
+  (src/deleted-items/item.vue); a deleted folder's row is
+  div.forest-item.folder.deleted.
+  While it restores, the row is replaced by a "Restoring..." row (class
+  "loading"), and the deletion is dropped last, so the when step waits for
+  both rows to go: the restore has then finished. It doesn't wait on the
+  stash, so a restore that never re-creates the bookmarks fails its own then
+  step.
+  The last step reloads Deleted Items and waits for its footer to be
+  "fully-loaded" (src/components/load-more.vue) before checking, so a list
+  that hasn't loaded yet can't pass for one without "Old".
+  Mutation check: in src/model/index.ts:1457, delete the line
+  `await this.putItemsInFolder({items: [item], toFolder, toIndex});`
+  so undelete never re-creates the bookmarks; '"Old" is back in the stash'
+  fails.

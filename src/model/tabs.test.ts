@@ -2,6 +2,7 @@ import {expect} from "chai";
 import browser from "webextension-polyfill";
 
 import * as events from "../mock/events.js";
+import type {OpenableURL} from "../util/index.js";
 
 import {
   B,
@@ -152,6 +153,51 @@ describe("model/tabs", () => {
       tabs.right_adam.id,
       tabs.right_doug.id,
     ]);
+  });
+
+  describe("create()", () => {
+    // Chrome rejects any key it doesn't know in tabs.create(), even when its
+    // value is undefined, so a container may only be sent when one is set.
+    async function createdWith(
+      cookieStoreId: string | undefined,
+    ): Promise<object> {
+      const create = browser.tabs.create;
+      const sent: object[] = [];
+      browser.tabs.create = opts => {
+        sent.push(opts);
+        return create.call(browser.tabs, opts);
+      };
+      try {
+        const p = model.create({
+          atParent: model.window(windows.left.id)!,
+          atIndex: 3,
+          // An about: URL takes the path Chrome uses for every tab.
+          url: "about:blank#create" as OpenableURL,
+          cookieStoreId,
+          active: false,
+        });
+        await events.next(browser.tabs.onCreated);
+        await events.next(browser.tabs.onUpdated);
+        await p;
+      } finally {
+        browser.tabs.create = create;
+      }
+      expect(sent.length).to.equal(1);
+      return sent[0];
+    }
+
+    it("doesn't send a container when none is given", async () => {
+      expect(await createdWith(undefined)).not.to.have.property(
+        "cookieStoreId",
+      );
+    });
+
+    it("sends the container when one is given", async () => {
+      expect(await createdWith("firefox-container-1")).to.have.property(
+        "cookieStoreId",
+        "firefox-container-1",
+      );
+    });
   });
 
   it("tracks tabs by URL", () => {
@@ -562,6 +608,20 @@ describe("model/tabs", () => {
 
     expect(model.tab(tabs.left_alice.id)!.active).to.equal(false);
     expect(model.tab(tabs.left_charlotte.id)!.active).to.equal(true);
+  });
+
+  it("keeps the focused window as the target after reloading", async () => {
+    // A background model has no initial window, so its target window is the
+    // focused one.
+    const bg = await M.Model.from_browser("background");
+    const cur = await browser.windows.getCurrent();
+    expect(bg.targetWindow.value).to.equal(bg.window(cur.id!));
+
+    // The current window is already in the model, so reloading must not leave
+    // just its ID behind.
+    await bg.reload();
+    expect(bg.targetWindow.value).to.not.be.undefined;
+    expect(bg.targetWindow.value).to.equal(bg.window(cur.id!));
   });
 
   describe("refocusAwayFromTabs()", () => {

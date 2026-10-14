@@ -1,0 +1,13 @@
+id: E01
+title: The extension installs and its stash list starts
+given:
+  - Tab Stash is installed in a fresh profile.
+when:
+  - The user opens the stash list.
+then:
+  - The stash list renders.
+notes: |
+  The stash list mounts its Vue app only after it connects to the
+  background's stores, so rendering also shows the background is running.
+  Mutation check: in dist/, delete stash-list.js (the page's own script)
+  before running; the browser starts but the list never renders.

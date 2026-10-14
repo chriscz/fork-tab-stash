@@ -1,0 +1,23 @@
+id: E06
+title: Restore a folder
+given:
+  - The stash has a folder "Reading" with Pages 1 to 3, and Page 2 is already open.
+when:
+  - The user clicks "Open all tabs in this group" on "Reading".
+then:
+  - Pages 1 to 3 are each open exactly once and visible, and Page 2's existing tab was reused.
+  - The bookmarks in "Reading" are unchanged.
+  - step: The stash list shows "Reading" with its three pages.
+    screenshot: stash-list-after-restore
+notes: |
+  restore_folders_into is seeded as "target-window", so no prompt appears.
+  The folder's restore link has class exactly "action restore".
+  Restoring a folder reuses a tab already open in the window with the same
+  URL (moveLeaf in src/model/index.ts) instead of opening a duplicate.
+  Restoring activates the last restored tab, so the screenshot step makes
+  the test's tab active again (h.activate). The when step waits for every
+  page to finish loading, so no loading icons reach the screenshot.
+  Mutation check: in src/model/index.ts:1105, replace
+  `(t.hidden || t.position?.parent === to_parent)` with `t.hidden`, so
+  moveLeaf never reuses a tab that is already open in the window; the
+  "each open exactly once" step fails.

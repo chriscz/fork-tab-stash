@@ -466,9 +466,9 @@ export default defineComponent({
           to_stash = to_stash.filter(t => t.type !== "tab" || !t.pinned);
         }
 
-        if (to_stash.length === 0) return;
+        if (!to_stash.some(i => the.model.isItemStashable(i))) return;
         await the.model.putItemsInFolder({
-          items: copyIf(ev.altKey, to_stash),
+          items: the.model.copyIfStashable(ev.altKey, to_stash),
           toFolder: await the.model.createStashFolder(),
         });
       });

@@ -10,12 +10,37 @@ import service_model from "./service-model.js";
 import {
   asyncEvent,
   backingOff,
+  deferredListener,
   filterMap,
   nonReentrant,
   urlToOpen,
   $t,
 } from "./util/index.js";
-import {logErrorsFrom} from "./util/oops.js";
+import {logError, logErrorsFrom} from "./util/oops.js";
+
+// The toolbar button's API is `action` under MV3 (Chrome) and `browserAction`
+// under MV2 (Firefox).
+const browserAction = browser.action ?? browser.browserAction;
+// Firefox only exposes browser.action under MV3, and MV3 renames the toolbar
+// button's menu context to "action".
+const MV3 = !!browser.action;
+
+// A Chrome (MV3) service worker only receives the event that woke it if the
+// listener was added synchronously at load.  Add them here; the handlers are
+// attached below once the model has loaded.
+const browserWakeEvents = {
+  menuClicked: deferredListener(browser.contextMenus.onClicked),
+  browserActionClicked: browserAction
+    ? deferredListener(browserAction.onClicked)
+    : undefined,
+  pageActionClicked: browser.pageAction
+    ? deferredListener(browser.pageAction.onClicked)
+    : undefined,
+  // Chrome (MV3) only: the service worker restarts too often for timers, so
+  // daily GC runs from an alarm.  Firefox's manifest doesn't request
+  // "alarms", so this is undefined there.
+  alarm: browser.alarms ? deferredListener(browser.alarms.onAlarm) : undefined,
+};
 
 logErrorsFrom(async () => {
   // BEGIN FILE-WIDE ASYNC BLOCK
@@ -69,6 +94,10 @@ logErrorsFrom(async () => {
     contexts: Menus.ContextType[],
     def: string[][],
   ) {
+    if (MV3) {
+      contexts = contexts.map(c => (c === "browser_action" ? "action" : c));
+    }
+
     // Only create menus in contexts this browser understands.
     const allowed_ctxs = Object.values(
       (<any>browser.contextMenus).ContextType ||
@@ -87,7 +116,7 @@ logErrorsFrom(async () => {
     );
     contexts = contexts.filter(x => allowed_ctxs.includes(x));
 
-    for (let [id, title] of def) {
+    for (const [i, [id, title]] of def.entries()) {
       if (id) {
         browser.contextMenus.create({contexts, title, id: idprefix + id});
       } else {
@@ -95,6 +124,8 @@ logErrorsFrom(async () => {
           contexts,
           type: "separator",
           enabled: false,
+          // Chrome requires an id when the background is a service worker.
+          id: `${idprefix}sep${i}`,
         });
       }
     }
@@ -109,6 +140,12 @@ logErrorsFrom(async () => {
     $t("showStashedTabsInSidebarMenu"),
   ];
 
+  // Chrome may keep menus across service-worker restarts, and creating an
+  // existing ID fails, so start from a clean slate.
+  if (MV3) await browser.contextMenus.removeAll();
+
+  // The end-to-end tests' Chrome adapter (e2e/harness/chrome.cts) lists these
+  // page-menu ids and labels to pick an item, so keep it in step with them.
   menu(
     "1:",
     ["tab", "page", "tools_menu"],
@@ -142,18 +179,20 @@ logErrorsFrom(async () => {
     ],
   );
 
-  menu(
-    "3:",
-    ["page_action"],
-    [
-      ["show_tab", SHOW_TAB_NAME],
-      ...(browser.sidebarAction ? [SHOW_SIDEBAR_OR_TAB] : []),
-      ["", ""],
-      ["stash_one", $t("stashThisTabMenu")],
-      ["stash_one_newgroup", $t("stashThisTabToNewGroupMenu")],
-      ["copy_one", $t("copyThisTabToStashMenu")],
-    ],
-  );
+  if (browser.pageAction) {
+    menu(
+      "3:",
+      ["page_action"],
+      [
+        ["show_tab", SHOW_TAB_NAME],
+        ...(browser.sidebarAction ? [SHOW_SIDEBAR_OR_TAB] : []),
+        ["", ""],
+        ["stash_one", $t("stashThisTabMenu")],
+        ["stash_one_newgroup", $t("stashThisTabToNewGroupMenu")],
+        ["copy_one", $t("copyThisTabToStashMenu")],
+      ],
+    );
+  }
 
   const commands: {[key: string]: (t?: Tab) => Promise<void>} = {
     // NOTE: Several of these commands open the sidebar.  We have to open the
@@ -163,10 +202,10 @@ logErrorsFrom(async () => {
     // Also note that some browsers don't support the sidebar at all; in these
     // cases, we open the tab instead.
 
-    show_sidebar_or_tab: () =>
+    show_sidebar_or_tab: (t?: Tab) =>
       browser.sidebarAction
         ? browser.sidebarAction.open().catch(console.log)
-        : commands.show_tab(),
+        : commands.show_tab(t),
 
     async show_popup() {
       // Ugh, this hack where we set and then clear the popup is necessary
@@ -175,16 +214,16 @@ logErrorsFrom(async () => {
       // rather than running the browserAction.onClicked callback (which might
       // do other things besides setting the popup).
       try {
-        await browser.browserAction.setPopup({
+        await browserAction.setPopup({
           popup: "stash-list.html?view=popup",
         });
-        await browser.browserAction.openPopup();
+        await browserAction.openPopup();
       } finally {
-        await browser.browserAction.setPopup({popup: ""});
+        await browserAction.setPopup({popup: ""});
       }
     },
 
-    async show_tab() {
+    async show_tab(tab?: Tab) {
       await model.restoreTabs(
         [
           {
@@ -192,17 +231,17 @@ logErrorsFrom(async () => {
             url: browser.runtime.getURL("stash-list.html"),
           },
         ],
-        {},
+        {toWindow: tab?.flattenedPosition?.parent},
       );
     },
 
     async stash_all(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       await stash_something({what: "all", copy: false, tab});
     },
 
     async stash_pinned(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       if (!tab || tab.flattenedPosition === undefined) return;
       const pinnedTabs = model.pinnedTabsInWindow(tab.flattenedPosition.parent);
       if (pinnedTabs.length === 0) return;
@@ -213,13 +252,14 @@ logErrorsFrom(async () => {
     },
 
     async stash_one(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       await stash_something({what: "single", copy: false, tab});
     },
 
     async stash_one_newgroup(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
-      if (!tab) return;
+      show_something(model.options.sync.state.open_stash_in, tab);
+      // putItemsInFolder() would skip this tab and leave the folder empty.
+      if (!tab || !model.isTabStashable(tab)) return;
       await model.putItemsInFolder({
         items: [tab],
         toFolder: await model.createStashFolder(),
@@ -227,12 +267,12 @@ logErrorsFrom(async () => {
     },
 
     async copy_all(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       await stash_something({what: "all", copy: true, tab});
     },
 
     async copy_one(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       await stash_something({what: "single", copy: true, tab});
     },
 
@@ -244,24 +284,25 @@ logErrorsFrom(async () => {
   // Shows the Tab Stash UI in the manner requested by /show_what/.  NOTE that to
   // be able to open the sidebar, this function must be invoked in a
   // user-initiated event handler context BEFORE any async operations are done.
-  function show_something(show_what?: ShowWhatOpt) {
+  function show_something(show_what?: ShowWhatOpt, tab?: Tab) {
     switch (show_what) {
       case "none":
         break;
 
       case "tab":
-        model.attempt(commands.show_tab);
+        model.attempt(() => commands.show_tab(tab));
         break;
 
       case "popup":
         model.attempt(commands.show_popup);
+        break;
 
       case "sidebar":
-        model.attempt(commands.show_sidebar_or_tab);
+        model.attempt(() => commands.show_sidebar_or_tab(tab));
         break;
 
       default:
-        show_setup_page();
+        show_setup_page(tab);
         break;
     }
   }
@@ -293,7 +334,7 @@ logErrorsFrom(async () => {
     }
   }
 
-  function show_setup_page() {
+  function show_setup_page(tab?: Tab) {
     model.attempt(() =>
       model.restoreTabs(
         [
@@ -302,7 +343,7 @@ logErrorsFrom(async () => {
             url: browser.runtime.getURL("setup.html"),
           },
         ],
-        {},
+        {toWindow: tab?.flattenedPosition?.parent},
       ),
     );
   }
@@ -311,15 +352,15 @@ logErrorsFrom(async () => {
   // Top-level/user facing event bindings, which mostly just call commands.
   //
 
-  browser.contextMenus.onClicked.addListener((info, tab) => {
+  browserWakeEvents.menuClicked.handle((info, tab) => {
     // #cast We only ever create menu items with string IDs
     const cmd = (<string>info.menuItemId).replace(/^[^:]*:/, "");
     console.assert(!!commands[cmd]);
     const t = tab?.id ? model.tabs.tab(tab?.id) : undefined;
-    commands[cmd](t).catch(console.log);
+    commands[cmd](t).catch(logError);
   });
 
-  if (browser.browserAction) {
+  if (browserWakeEvents.browserActionClicked) {
     // In order for show_something('popup') to work, we must preconfigure the
     // browser to know which popup to show.  This cannot be done at the time of
     // show_something() because doing so requires an async call, and Firefox
@@ -332,42 +373,40 @@ logErrorsFrom(async () => {
           // will no longer run (the popup will be shown instead).  This
           // unfortunately means that we can't stash and show the popup at
           // the same time.  Sigh.
-          await browser.browserAction.setPopup({
+          await browserAction.setPopup({
             popup: "stash-list.html?view=popup",
           });
         } else {
           // If the user turns off the popup, we must clear the popup in
           // the browser if we expect anything else to work.
-          await browser.browserAction.setPopup({popup: ""});
+          await browserAction.setPopup({popup: ""});
         }
       });
     }
     setupPopup();
     model.options.sync.onChanged.addListener(setupPopup);
 
-    browser.browserAction.onClicked.addListener(
-      asyncEvent(async tab => {
+    browserWakeEvents.browserActionClicked.handle(
+      asyncEvent(async browserTab => {
         const opts = model.options.sync.state;
+        const tab = model.tabs.tab(browserTab.id!);
         // Special case so the user doesn't think Tab Stash is broken
         if (!opts.browser_action_show || !opts.browser_action_stash) {
-          show_setup_page();
+          show_setup_page(tab);
           return;
         }
-        show_something(opts.browser_action_show);
-        await stash_something({
-          what: opts.browser_action_stash,
-          tab: model.tabs.tab(tab.id!)!,
-        });
+        show_something(opts.browser_action_show, tab);
+        await stash_something({what: opts.browser_action_stash, tab});
       }),
     );
   }
 
-  if (browser.pageAction) {
-    browser.pageAction.onClicked.addListener(
+  if (browserWakeEvents.pageActionClicked) {
+    browserWakeEvents.pageActionClicked.handle(
       asyncEvent(async tab => {
         if (!model.options.sync.state.open_stash_in) {
           // User hasn't decided what this button should do yet
-          show_setup_page();
+          show_setup_page(model.tabs.tab(tab.id!));
           return;
         }
         commands.stash_one(model.tabs.tab(tab.id));
@@ -410,8 +449,8 @@ logErrorsFrom(async () => {
         }
       }
 
-      if (browser.browserAction) {
-        await browser.browserAction.setTitle({
+      if (browserAction) {
+        await browserAction.setTitle({
           title: getTitle(opts.state.browser_action_stash),
         });
       }
@@ -438,6 +477,8 @@ logErrorsFrom(async () => {
   //
 
   logErrorsFrom(async () => {
+    // Nothing to close where tabs can't be hidden, so skip walking the stash.
+    if (!browser.tabs.hide) return;
     let managed_urls = await model.bookmarks.urlsInStash();
 
     const close_removed_bookmarks = backingOff(() =>
@@ -463,6 +504,9 @@ logErrorsFrom(async () => {
       }),
     );
 
+    // onCreated closes nothing itself, but keeps managed_urls up to date, so
+    // removing a bookmark stashed since startup closes its tab.
+    browser.bookmarks.onCreated.addListener(close_removed_bookmarks);
     browser.bookmarks.onChanged.addListener(close_removed_bookmarks);
     browser.bookmarks.onMoved.addListener(close_removed_bookmarks);
     browser.bookmarks.onRemoved.addListener(close_removed_bookmarks);
@@ -567,6 +611,22 @@ logErrorsFrom(async () => {
   // Needed to prevent Tab Stash from consuming an unbounded amount of the user's
   // local storage.
   //
+
+  // Keep this section last: on Chrome it returns before Firefox's GC code
+  // below.
+  if (browserWakeEvents.alarm) {
+    browserWakeEvents.alarm.handle(() => model.attempt(() => model.gc()));
+    // create() replaces an existing alarm and restarts its period, and this
+    // code runs on every wake, so only create it when it's missing.  The
+    // first GC comes a minute later, e.g. after a fresh install.
+    if (!(await browser.alarms.get("gc"))) {
+      await browser.alarms.create("gc", {
+        delayInMinutes: 1,
+        periodInMinutes: 24 * 60,
+      });
+    }
+    return;
+  }
 
   const gc = nonReentrant(() =>
     model.attempt(async () => {

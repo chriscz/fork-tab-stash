@@ -1,0 +1,29 @@
+id: E20
+title: Pinned tabs are included when the option is on
+given:
+  - Three local pages are open, Page 1 is pinned, and "include pinned tabs" is on.
+when:
+  - The user clicks "Stash all" in the open-tabs section of the stash list.
+then:
+  - The new stash folder holds Pages 1 to 3.
+  - step: Page 1 is now hidden and no longer pinned.
+    browser: firefox
+  - step: Page 1 is closed.
+    browser: chrome
+notes: |
+  Seeds sync option stash_include_pinned: true before pinning, because
+  seeding reloads the page. Hiding a pinned tab unpins it first, since
+  Firefox won't hide pinned tabs (src/model/tabs.ts).
+  The open-tabs "Stash all" button reads the option itself (stash() in
+  src/stash-list/window.vue). Pinned tabs sit first in the window, so Page 1
+  still comes first in the folder.
+  The when step waits only for the new folder; the then step waits for
+  Pages 2 and 3 to leave the window, after which the folder is final, since
+  Tab Stash puts the bookmarks in place before hiding the tabs.
+  Mutation check: in src/stash-list/window.vue:465, replace
+  `!the.model.options.sync.state.stash_include_pinned` with `true`, so
+  pinned tabs are always left out; the "Pages 1 to 3" step fails.
+  Chrome mutation check: in src/model/tabs.ts:664, replace
+  `await this.remove(tabs);` with
+  `await this.remove(tabs.filter(t => !t.pinned));`, so pinned tabs are
+  stashed but stay open; only "Page 1 is closed" fails.

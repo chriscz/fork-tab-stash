@@ -524,44 +524,6 @@ export default defineComponent({
     },
   },
 
-  watch: {
-    browser_action_show(val: Options.ShowWhatOpt) {
-      switch (val) {
-        case "popup":
-          logErrorsFrom(() =>
-            this.model.sync.set({browser_action_stash: "none"}),
-          );
-          break;
-        case "none":
-          if (this.model.sync.state.browser_action_stash === "none") {
-            logErrorsFrom(() =>
-              this.model.sync.set({browser_action_stash: "single"}),
-            );
-          }
-          break;
-      }
-    },
-
-    browser_action_stash(val: Options.StashWhatOpt) {
-      switch (val) {
-        case "none":
-          if (this.model.sync.state.browser_action_show === "none") {
-            logErrorsFrom(() =>
-              this.model.sync.set({browser_action_show: "tab"}),
-            );
-          }
-          break;
-        default:
-          if (this.model.sync.state.browser_action_show === "popup") {
-            logErrorsFrom(() =>
-              this.model.sync.set({browser_action_show: "tab"}),
-            );
-          }
-          break;
-      }
-    },
-  },
-
   methods: {
     $t,
 

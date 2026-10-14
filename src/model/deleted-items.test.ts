@@ -310,6 +310,13 @@ describe("model/deleted-items", () => {
     });
 
     it("loads only items which match the applied filter", async () => {
+      // The fake titles are random, so add one known match to make sure the
+      // filter has something to find.
+      const m2 = new M.Model(source);
+      await m2.add({title: "Black cat", url: "http://cat"});
+      await events.next(source.onSet);
+      m2.clearRecentlyDeletedItems();
+
       await model.makeFakeData_testonly(50, 7);
       await events.nextN(source.onSet, 8);
       expect(model.state.entries.length).to.equal(0);
@@ -337,8 +344,12 @@ describe("model/deleted-items", () => {
     it("only loads new items that match the applied filter", async () => {
       model.filter(item => item.title.includes("cat"));
       const m2 = new M.Model(source);
+      // The fake titles are random, so add one known match to make sure the
+      // filter has something to find.
+      await m2.add({title: "Black cat", url: "http://cat"});
+      m2.clearRecentlyDeletedItems();
       await m2.makeFakeData_testonly(50);
-      await events.nextN(source.onSet, 50);
+      await events.nextN(source.onSet, 51);
 
       while (!model.state.fullyLoaded) await model.loadMore();
       expect(model.state.entries.length).to.be.greaterThan(0);

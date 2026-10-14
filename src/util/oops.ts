@@ -27,7 +27,14 @@ export async function logErrorsFrom<R>(f: () => Promise<R>): Promise<R> {
 
 /** Add an error to the log. */
 export function logError(error: unknown) {
-  console.error(error);
+  // The stack is logged as text too, because Chrome's extension Errors page
+  // keeps only the text of what was logged and the logger's own frame, which
+  // would otherwise lose where the error was raised.
+  if (error instanceof Error && error.stack) {
+    console.error(error, "\n" + error.stack);
+  } else {
+    console.error(error);
+  }
 
   if (error instanceof Error) {
     errorLog.push({

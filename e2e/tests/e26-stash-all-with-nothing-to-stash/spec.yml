@@ -1,0 +1,35 @@
+id: E26
+title: Stashing all tabs with nothing to stash creates no folder
+upstream-bug: Stashing with nothing to stash creates an empty folder
+given:
+  - The toolbar button is set to stash all tabs and show nothing.
+  - The window holds only the stash list and Page 1, which is pinned.
+when:
+  - The user clicks Tab Stash's toolbar button.
+then:
+  - No folder appears in the stash.
+  - Page 1 is still open, pinned and visible.
+notes: |
+  The toolbar runs stashAllTabsInWindow() (src/model/index.ts). It
+  checked that stashableItemsInWindow() wasn't empty and then created the
+  folder, but that list still holds tabs putItemsInFolder() skips: here
+  the stash list's own tab. Pinned tabs are left out by default
+  (stash_include_pinned is false). So the click made a folder and put
+  nothing in it. The fix checks instead for an item putItemsInFolder()
+  would stash (isItemStashable()), so no folder is made.
+  "show nothing" (browser_action_show "none") is allowed while the button
+  stashes (canBrowserActionShow() in src/model/options.ts) and keeps the
+  click to the stash alone. Seeding reloads the page, so it comes before
+  pinning.
+  Nothing tells the test that the background has finished with the
+  click, so the then step waits a fixed second (as E04 does) before
+  checking that no folder appeared. Without the fix the folder appears
+  well within that second, in both browsers.
+  The stash list's own "Stash all" button (stash() in
+  src/stash-list/window.vue) had the same bug and the same fix; it isn't
+  checked here, since a spec takes one action.
+  Upstream 622bf3d has the same code. Without the fix, "No folder appears
+  in the stash" fails with one empty saved-... folder in both browsers.
+  Mutation check: in stashAllTabsInWindow(), put back
+  `if (items.length === 0) return;` in place of the isItemStashable()
+  check; the same step fails the same way.

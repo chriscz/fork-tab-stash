@@ -1,0 +1,25 @@
+id: E13
+title: Search filters the stash
+given:
+  - The stash has folders "Reading" with Pages 1 and 2, and "Cooking" with Page 3.
+when:
+  - The user opens the stash list with the search "Page 3".
+then:
+  - Only "Cooking" and its Page 3 are shown; "Reading" and its pages are not.
+  - step: The stash list shows only the matching folder.
+    screenshot: search-page-3
+notes: |
+  The stash list reads ?q= on load into its search box.
+  A folder with no match in it isn't rendered at all
+  (isVisible in src/stash-list/folder-list.vue). A folder that holds a match
+  is shown even if its own title doesn't match: "Cooking" is rendered with
+  .no-match, which only dims and strikes through its title. So "shown" means
+  rendered and visible (offsetParent set), whatever its classes.
+  The stash's folders are in the ul.forest of folder-list.vue; the open-tabs
+  section is the separate ul.forest.one-column, which the checks skip.
+  No folder or page shows a date, so the screenshot needs no mask. The
+  golden includes the footer's version, so a version bump means
+  regenerating it from the baseline.
+  Mutation check: in src/stash-list/folder-list.vue:65, replace
+  `(fi.isMatching || fi.hasMatchInSubtree || si.hasSelectionInSubtree)` with
+  `true`, so every folder is rendered; "Only Cooking" fails.

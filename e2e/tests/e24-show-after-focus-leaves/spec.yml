@@ -1,0 +1,41 @@
+id: E24
+title: The toolbar button shows Tab Stash after focus has left the window
+browser: chrome
+upstream-bug: Showing Tab Stash fails once focus leaves the browser
+given:
+  - The toolbar button is set to show the stash in a tab and stash nothing.
+  - The user is on Tab Stash's options page.
+  - The user opened a second window and closed it, so no window has focus.
+when:
+  - The user clicks Tab Stash's toolbar button.
+then:
+  - A tab showing the stash list opens in the user's window.
+notes: |
+  The background shows Tab Stash with restoreTabs() (src/model/index.ts),
+  which opened it in the tab model's targetWindow: in the background, the
+  window that last had focus. When focus leaves every window (to another
+  app, or to DevTools), Chrome sends windows.onFocusChanged with
+  WINDOW_ID_NONE and targetWindow becomes undefined, so the click opened
+  nothing and logged "No target window; not sure where to restore tabs".
+  The fix opens Tab Stash in the window of the tab the user clicked from,
+  and failing that in the window the browser last focused.
+  The headless browser can't move focus to another app, so the given step
+  opens a second window and closes it: Chrome then reports WINDOW_ID_NONE
+  and doesn't give the first window focus back. The step waits for the
+  page to see that event too, since it goes to every extension context.
+  Chrome-only: closing the second window in headless Firefox (157.0.1)
+  sends WINDOW_ID_NONE and then the first window's id, so the model keeps
+  a target window and the bug can't be reached there on demand.
+  The options page is open in the test's tab so that the stash list isn't
+  already open in the window; restoreTabs() would only switch to it.
+  The tab menus' "Show Stashed Tabs" and the address bar's page action go
+  through the same commands and are fixed by the same change, but aren't
+  checked here: a spec takes one action.
+  Upstream 622bf3d has no Chrome build that loads, so the spec can't run
+  there. Without the fix (this fork just before it), the then step times
+  out and "no errors were logged" fails with the error above. Reverting
+  only e6b805b's threading of the clicked tab (its src/index.ts and
+  src/model/index.ts changes) no longer fails the spec, because 4f92764's
+  fallback to windows.getLastFocused() in restoreTabs() still finds the
+  window. Reverting both the threading and that fallback is the mutation
+  check, with the same result as without the fix.
