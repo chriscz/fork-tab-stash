@@ -383,6 +383,12 @@ export class Model {
     return !t.hidden && this.isURLStashable(t.url);
   }
 
+  /** Will `putItemsInFolder()` stash this tab, or any tab in this group? */
+  isItemStashable(item: Tabs.Tab | Tabs.TabGroupExtent): boolean {
+    if (isTab(item)) return this.isTabStashable(item);
+    return item.children.some(c => this.isTabStashable(c));
+  }
+
   /** `copyIf()` for items going into a folder.  A copied tab is just a title
    * and URL, so `putItemsInFolder()` can no longer tell whether to skip it;
    * tabs it would skip are left out before they are copied. */
@@ -558,7 +564,9 @@ export class Model {
     },
   ) {
     const items = this.stashableItemsInWindow(window);
-    if (items.length === 0) return;
+    // putItemsInFolder() skips the tabs it can't stash, so check for those
+    // too, or the new folder would stay empty.
+    if (!items.some(i => this.isItemStashable(i))) return;
 
     await this.putItemsInFolder({
       items: this.copyIfStashable(!!options.copy, items),

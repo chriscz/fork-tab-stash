@@ -217,6 +217,28 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Fix:** this commit's fix, which adds one item titled "Black cat" before the
   random data in both tests.
 
+### Stashing with nothing to stash creates an empty folder
+
+- **Where:** `Model.stashAllTabsInWindow()` in `src/model/index.ts` (the
+  toolbar button and the tab menus' "stash all" items, and a folder's
+  "stash to a new child folder"), and `stash()` in
+  `src/stash-list/window.vue` (the stash list's own "Stash all").
+- **What:** both checked that the list of tabs to stash wasn't empty and
+  then created the folder, but the list still held tabs
+  `putItemsInFolder()` skips: the Tab Stash page's own tab, hidden tabs, and
+  tab groups holding only those. Pinned tabs are left out by default, so a
+  window with only pinned tabs and the Tab Stash page had nothing to stash
+  but still got a folder. Upstream `622bf3d` has the same code.
+- **Effect:** clicking the toolbar button (set to stash all) or "Stash all"
+  in such a window adds a new, empty folder to the stash.
+- **Found:** reported by the user, 2026-10-14: with only pinned tabs and the
+  Tab Stash page open, the toolbar button made an empty folder. Reproduced
+  with E26 in Firefox and Chrome, and with the stash list's "Stash all" in
+  Firefox; each made one empty `saved-…` folder.
+- **Fix:** this commit, which adds `Model.isItemStashable()` (a tab
+  `putItemsInFolder()` would stash, or a group holding one) and has both
+  skip the stash when no item passes it. E26 checks the toolbar button.
+
 ### Alt-clicking "Stash all" copies the Tab Stash page too
 
 - **Where:** `copying()` in `src/model/index.ts`, used by `stash()` in

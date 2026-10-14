@@ -302,6 +302,26 @@ describe("model", () => {
     });
   });
 
+  describe("stashes all tabs in a window", () => {
+    it("creates no folder when no tab in the window can be stashed", async () => {
+      // Leaves the small window with a pinned tab, the Tab Stash page and a
+      // hidden tab, none of which a stash takes.
+      await browser.tabs.update(env.tabs.small_active.id, {
+        url: browser.runtime.getURL("stash-list.html"),
+      });
+      await events.nextN(browser.tabs.onUpdated, 2);
+      const before = env.model.bookmarks.stash_root.value!.children.length;
+
+      const win = env.model.tabs.window(env.windows.small.id)!;
+      await env.model.stashAllTabsInWindow(win, {});
+
+      expect(env.model.bookmarks.stash_root.value!.children.length).to.equal(
+        before,
+      );
+      expect(events.pendingCount()).to.equal(0);
+    });
+  });
+
   describe("hides or closes stashed tabs", () => {
     describe("according to user settings", () => {
       it("hides tabs but keeps them loaded", async () => {
