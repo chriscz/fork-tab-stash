@@ -1,0 +1,53 @@
+set opts: ok
+--- warm action click, open after 0 ms
+ log: ["action delay0 open REJECT `sidePanel.open()` may only be called in response to a user gesture."]
+ panel targets: []
+ close: ok
+--- warm action click, open after 50 ms
+ log: ["action delay50 open REJECT `sidePanel.open()` may only be called in response to a user gesture."]
+ panel targets: []
+ close: ok
+--- warm action click, open after 500 ms
+ log: ["action delay500 open REJECT `sidePanel.open()` may only be called in response to a user gesture."]
+ panel targets: []
+ close: ok
+--- warm click to open panel before stop
+ log: ["action sync open OK","onOpened {\"path\":\"/stash-list.html\",\"windowId\":1381724470}"]
+ panel targets: ["page"]
+ stopped: true
+ worker target present 1s after stop with panel open: true
+ close: ok
+ stopped: true
+--- COLD click, sync open in top-level listener
+ log: ["action sync open OK","onOpened {\"path\":\"/stash-list.html\",\"windowId\":1381724470}"]
+ panel targets: ["page"]
+ close: ok
+ stopped: true
+--- COLD click, open 300 ms later
+ log: ["action delay300 open REJECT `sidePanel.open()` may only be called in response to a user gesture."]
+ panel targets: []
+ close: ok
+ stopped: true
+--- COLD click, open 1500 ms later
+ log: ["action delay1500 open REJECT `sidePanel.open()` may only be called in response to a user gesture."]
+ panel targets: []
+ close: ok
+setPanelBehavior: ok
+--- click with openPanelOnActionClick (warm)
+ log: ["onOpened {\"path\":\"/stash-list.html\",\"windowId\":1381724470}"]
+ panel targets: ["page"]
+ close: ok
+ stopped: true
+--- click with openPanelOnActionClick (COLD)
+ log: ["onOpened {\"path\":\"/stash-list.html\",\"windowId\":1381724470}"]
+ panel targets: ["page"]
+ behavior persisted across restart: {"openPanelOnActionClick":true}
+ close: ok
+setOptions enabled:false: ok
+--- click with enabled:false
+ log: ["onClosed {\"path\":\"/stash-list.html\",\"windowId\":1381724470}","action sync open REJECT No active side panel for windowId: 1381724470"]
+ panel targets: []
+setPopup then click: ok
+--- click with popup set
+ log: []
+ panel targets: []

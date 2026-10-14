@@ -1,0 +1,67 @@
+version Chrome/155.0.8059.39
+api {"chromeSP":["onClosed","onOpened","close","getLayout","getOptions","getPanelBehavior","open","setOptions","setPanelBehavior","Side"],"browserSP":["onClosed","onOpened","close","getLayout","getOptions","getPanelBehavior","open","setOptions","setPanelBehavior","Side"],"onOpened":true,"close":"function"}
+getOptions {"enabled":true,"path":"stash-list.html?view=sidebar"}
+getPanelBehavior {"openPanelOnActionClick":false}
+getLayout {"side":"right"}
+windowId 1717354550
+1 no-gesture open: ERR `sidePanel.open()` may only be called in response to a user gesture.
+--- after no-gesture open
+ log: []
+ targets: []
+ contexts: [["BACKGROUND",null,-1,-1]]
+--- warm action click, sync open
+ log: ["action sync open OK","onOpened {\"path\":\"/stash-list.html\",\"windowId\":1717354550}"]
+ targets: ["page chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar"]
+ contexts: [["BACKGROUND",null,-1,-1],["SIDE_PANEL","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar",-1,-1],["TAB","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/setup.html",1717354550,1717354552]]
+ panel target type: page
+ panel page: {"href":"chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar","w":360,"h":445,"view":"sidebar","list":true,"tabsGetCurrent":null,"winType":null}
+ panel getCurrent tab: null
+ panel windows.getCurrent: 1717354550
+ panel getContexts self: ["SIDE_PANEL"]
+ close: ok
+--- after close
+ log: ["onClosed {\"path\":\"/stash-list.html\",\"windowId\":1717354550}"]
+ targets: []
+ contexts: [["BACKGROUND",null,-1,-1],["TAB","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/setup.html",1717354550,1717354552]]
+--- warm action click, open after 50 ms
+ log: ["action sync open OK","onOpened {\"path\":\"/stash-list.html\",\"windowId\":1717354550}"]
+ targets: ["page chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar"]
+ contexts: [["BACKGROUND",null,-1,-1],["TAB","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/setup.html",1717354550,1717354552],["SIDE_PANEL","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar",-1,-1]]
+ close: ok
+--- warm action click, open after 500 ms
+ log: ["onClosed {\"path\":\"/stash-list.html\",\"windowId\":1717354550}","action sync open OK","onOpened {\"path\":\"/stash-list.html\",\"windowId\":1717354550}"]
+ targets: ["page chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar"]
+ contexts: [["BACKGROUND",null,-1,-1],["TAB","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/setup.html",1717354550,1717354552],["SIDE_PANEL","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar",-1,-1]]
+ close: ok
+--- warm action click, open after 1500 ms
+ log: ["onClosed {\"path\":\"/stash-list.html\",\"windowId\":1717354550}","action sync open OK","onOpened {\"path\":\"/stash-list.html\",\"windowId\":1717354550}"]
+ targets: ["page chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar"]
+ contexts: [["BACKGROUND",null,-1,-1],["TAB","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/setup.html",1717354550,1717354552],["SIDE_PANEL","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar",-1,-1]]
+ close: ok
+--- warm action click, open after 5000 ms
+ log: ["onClosed {\"path\":\"/stash-list.html\",\"windowId\":1717354550}","action sync open OK","onOpened {\"path\":\"/stash-list.html\",\"windowId\":1717354550}"]
+ targets: ["page chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar"]
+ contexts: [["BACKGROUND",null,-1,-1],["TAB","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/setup.html",1717354550,1717354552],["SIDE_PANEL","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html?view=sidebar",-1,-1]]
+ close: ok
+4 dispatch: dispatched
+--- menu dispatch(), sync open
+ log: ["onClosed {\"path\":\"/stash-list.html\",\"windowId\":1717354550}","menu sync open REJECT `sidePanel.open()` may only be called in response to a user gesture."]
+ targets: []
+ contexts: [["BACKGROUND",null,-1,-1],["TAB","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/setup.html",1717354550,1717354552],["TAB","chrome-extension://gkncaabfficjgdjmmkdbconncgnfnbka/stash-list.html",1717354550,1717354553]]
+ close: ok
+ worker running after stop? true
+--- COLD action click, sync open at top-level listener
+ log: "EVAL ERR Timed out after waiting 30000ms"
+ targets: []
+ contexts: EVAL ERR Timed out after waiting 30000ms
+ close: EVAL ERR Timed out after waiting 30000ms
+ worker running after stop? true
+--- COLD action click, open 1500ms later
+ log: "EVAL ERR Timed out after waiting 30000ms"
+ targets: []
+ contexts: EVAL ERR Timed out after waiting 30000ms
+ close: EVAL ERR Timed out after waiting 30000ms
+6 setPanelBehavior: EVAL ERR Timed out after waiting 30000ms
+--- action click with openPanelOnActionClick
+ log: "EVAL ERR Timed out after waiting 30000ms"
+ targets: []
