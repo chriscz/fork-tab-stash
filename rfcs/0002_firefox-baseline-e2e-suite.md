@@ -63,7 +63,7 @@ Chrome needs none of these workarounds: Puppeteer's `page.goto`, `page.evaluate`
 ## Non-goals
 
 - **Running the suite on Chrome.** That belongs to RFC 0001, which built the Chrome adapter and ran every spec's `browser: chrome` steps; its "Phase 3 parity results" record the outcome.
-- **Things a page can't drive:** the toolbar button, context menus, keyboard shortcuts, the real sidebar, and drag-and-drop. They stay on the manual checklist. Drag-and-drop ends in the same `putItemsInFolder`/`putItemsInWindow` calls the buttons use.
+- **Things a page can't drive:** keyboard shortcuts, the real sidebar, and drag-and-drop. They stay on the manual checklist. Drag-and-drop ends in the same `putItemsInFolder`/`putItemsInWindow` calls the buttons use. The toolbar button and the tab menus are reachable through `clickToolbarButton()` and `clickTabMenuItem()`; on Chrome the menu click is dispatched, so Chrome's real page menu stays a manual check.
 - **Cross-OS rendering checks.** The maintainer wants Chrome checked on Windows, macOS and Linux; that's manual. This suite's screenshots compare the same browser, in the same image, against itself.
 - **Clipboard export and copy.** These need a user gesture (`execCommand('copy')`).
 - **Timed background jobs.** Auto-discard after 2 minutes and the daily GC are slow and nondeterministic, and are covered by unit tests or the existing Chrome alarm test.

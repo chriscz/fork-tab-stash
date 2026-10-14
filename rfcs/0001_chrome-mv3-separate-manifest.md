@@ -374,7 +374,7 @@ Each of these is gated so that Firefox's MV2 build never runs it:
   - **Restarts are tested for real.** The adapter's `restartBackground()` stops the service worker, so E10 checks Goal 5.
   - **Triage.** A failure caused by the test or harness is fixed in the suite. A failure caused by the extension is fixed in the extension, in this RFC's stack. A failure that needs architectural change goes to a further RFC (below).
   - **No upstream reference.** Upstream has no Chrome build that loads (it's MV2), so the Firefox rule that every test first passes on upstream can't apply. Chrome results are trusted through the shared steps, already proven on upstream with Firefox; a mutation check for each Chrome-only step; and a human review of each Chrome screenshot before it becomes a golden. Chrome goldens are generated from a pinned commit of this fork.
-  - **Not covered.** The real toolbar popup closing mid-operation, the context menus and the toolbar button aren't reachable from the suite, so they stay manual checks below.
+  - **Not covered.** The real toolbar popup closing mid-operation stays a manual check below. The toolbar button and the menus are reachable through `clickToolbarButton()` and `clickTabMenuItem()`, but on Chrome the menu click is dispatched in the service worker, so Chrome's real page menu stays a manual check too.
 - **Cold-start check:** with a fresh profile, every Goal 1 item works.
 - **Restart check:** stop the worker by hand (the "service worker" link on `chrome://extensions`, then _Stop_ in DevTools). Then confirm each of these works on the first try:
   - the toolbar button, in normal and popup mode;

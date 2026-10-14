@@ -81,3 +81,5 @@
 - **A further fix:** when no window is known, `restoreTabs()` falls back to the browser's last focused window, and menu errors go through `logError()`.
 - **The empty-folder spec** became E26, not E25.
 - **Two related empty-folder bugs** were fixed: stashing a tab group (E27), and "Stash This Tab to a New Group" on the Tab Stash tab (E28).
+- **Firefox's `clickTabMenuItem()`** acted on the selected tab rather than the one the test named, until `6a55155`.
+- **E28 gained a positive control** in `f1de8a5`, which proves its menu click reaches the background.

@@ -43,6 +43,39 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   `setupPopup()` wants (the popup's URL while `browser_action_show` is
   `"popup"`, otherwise `""`) instead of always clearing it.
 
+### Copying a tab group copies its hidden or unstashable tabs
+
+- **Where:** `Model.copyIfStashable()` and `copying()` in
+  `src/model/index.ts`.
+- **What:** `copyIfStashable()` drops unstashable tabs only at the top level
+  of the items it's given. A tab group passes through whole, and `copying()`
+  turns every child into a plain `{title, url}`, which `putItemsInFolder()`
+  can no longer tell apart from an item it should keep.
+- **Effect:** Alt-stashing or copying a window whose tab group holds the Tab
+  Stash page or hidden tabs bookmarks them too; moving the same window
+  doesn't.
+- **Found:** final review, 2026-10-14.
+- **Fix:** not yet. Filter a group's children with `isTabStashable()` before
+  copying them.
+
+### Some errors are logged with console.log and skip the error log
+
+Low priority.
+
+- **Where:** `src/index.ts:207` (`browser.sidebarAction.open()` in
+  `show_sidebar_or_tab`) and `src/model/index.ts:802`
+  (`browser.tabs.remove()` of the active new tab in `restoreTabs()`); also
+  `src/stash-list/index.vue:451` (opening the options page) and
+  `src/stash-list/window.vue:531-532` (hiding or closing stashed tabs). All
+  end in `.catch(console.log)`.
+- **What:** these failures are printed with `console.log` instead of being
+  passed to `logError()`.
+- **Effect:** failures there don't reach Tab Stash's error log or its error
+  notification.
+- **Found:** final review, 2026-10-14.
+- **Fix:** not yet. Route them through `logError()`, as `4f92764` did for
+  the menu handler.
+
 ## Feature requests
 
 ### Restore nested folders as their own tab groups
@@ -166,6 +199,8 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Found:** debugging the Chrome toolbar and tab menu bugs found by hand,
   2026-10-14.
 - **Fix:** `1a3e0b7`, which uses the model's `Window` when it already has one.
+  There's no end-to-end spec: the reload happens only after an error, which
+  can't be triggered on demand through the UI. A unit test covers it.
 
 ### Chrome rejects dotted plural message keys
 
@@ -293,8 +328,8 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Fix:** `7d1c808`, which adds `Model.copyIfStashable()`: it leaves
   out the tabs `putItemsInFolder()` would skip (`Model.isTabStashable()`,
   now shared with it) before copying. E04 checks the folder's full contents.
-  Copying a tab group still copies its hidden or unstashable children, since
-  `copyIfStashable()` filters only top-level tabs.
+  Tab groups are still copied whole; see "Copying a tab group copies its
+  hidden or unstashable tabs" under open bugs.
 
 ### Removing a newly stashed bookmark leaves its hidden tab open
 
