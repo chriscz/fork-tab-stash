@@ -315,14 +315,40 @@ class Driver {
       : false`);
   }
 
+  // Waits until the extension's background is running and its model has
+  // loaded, so an event sent to it is handled.  A toolbar click that comes
+  // too soon after the extension starts can be lost.
+  private async backgroundLoaded(timeout: number): Promise<void> {
+    const end = Date.now() + timeout;
+    await this.waitUntil(
+      () => this.adapter.backgroundLoaded(end - Date.now()),
+      "the extension's background to load",
+      timeout,
+    );
+  }
+
+  // Clicks Tab Stash's toolbar button in the test's window, as the user
+  // would.  The browser then does what a real click does: it opens the popup
+  // if the background has set one, and otherwise sends the toolbar button's
+  // onClicked event, with the window's active tab, to the background.
+  async clickToolbarButton(timeout = TIMEOUT_MS): Promise<void> {
+    const end = Date.now() + timeout;
+    await this.backgroundLoaded(timeout);
+    await this.adapter.clickToolbarButton(end - Date.now());
+  }
+
   // Picks `label` from Tab Stash's items in the context menu of the tab
-  // showing `url`, as the user would by right-clicking the tab.  Firefox only.
-  clickTabMenuItem(
+  // showing `url`, as the user would by right-clicking the tab.  Chrome
+  // doesn't let extensions add to the tab's menu, so there the same items
+  // come from the page's own context menu, on the page showing `url`.
+  async clickTabMenuItem(
     url: string,
     label: string,
     timeout = TIMEOUT_MS,
   ): Promise<void> {
-    return this.adapter.clickTabMenuItem(url, label, timeout);
+    const end = Date.now() + timeout;
+    await this.backgroundLoaded(timeout);
+    await this.adapter.clickTabMenuItem(url, label, end - Date.now());
   }
 
   // Closes the browser's sidebar, as the user would with its close button.

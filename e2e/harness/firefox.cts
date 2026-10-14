@@ -129,6 +129,40 @@ async function launchAdapter({dist}: {dist: string}) {
       );
     },
 
+    // Whether the add-on's background page has loaded its model.  Firefox's
+    // background is a persistent page, which the test's extension page can
+    // reach directly.  While the test's tab isn't showing one of the
+    // extension's pages, it has no `browser`, so the answer is false.
+    async backgroundLoaded(): Promise<boolean> {
+      return await evaluateIn(
+        context,
+        `!!globalThis.browser?.extension?.getBackgroundPage()?.model`,
+      );
+    },
+
+    // Clicks the add-on's toolbar button in the window holding the test's
+    // tab, through browserActionFor(extension).triggerAction(window): the
+    // call Firefox's own "_execute_browser_action" shortcut makes, with the
+    // same effect as a click on the button.  It opens the button's popup if
+    // one is set, or else sends browserAction.onClicked with the window's
+    // active tab, and Firefox delivers that event as user input.  The window
+    // must be the focused one, as it is in the headless browser.
+    async clickToolbarButton() {
+      await evaluateIn(
+        await chromeContext(),
+        `(async () => {
+          const {ExtensionParent} = ChromeUtils.importESModule(
+            "resource://gre/modules/ExtensionParent.sys.mjs");
+          const ext = ExtensionParent.GlobalManager.getExtension(${JSON.stringify(ADDON_ID)});
+          if (!ext) throw new Error(${JSON.stringify(`Add-on ${ADDON_ID} isn't running`)});
+          const win = [...Services.wm.getEnumerator("navigator:browser")].find(w =>
+            w.gBrowser.browsers.some(b => b.currentURI.spec === ${JSON.stringify(openedUrl)}));
+          if (!win) throw new Error("No window holds the test's tab");
+          await ExtensionParent.apiManager.global.browserActionFor(ext).triggerAction(win);
+        })()`,
+      );
+    },
+
     // Right-clicks the tab showing `url` and picks `label` from the context
     // menu, opening the submenu Firefox groups an add-on's items into.  The
     // menu is the browser's own, so the item must really be there, and the

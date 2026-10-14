@@ -144,6 +144,8 @@ logErrorsFrom(async () => {
   // existing ID fails, so start from a clean slate.
   if (MV3) await browser.contextMenus.removeAll();
 
+  // The end-to-end tests' Chrome adapter (e2e/harness/chrome.cts) lists these
+  // page-menu ids and labels to pick an item, so keep it in step with them.
   menu(
     "1:",
     ["tab", "page", "tools_menu"],
