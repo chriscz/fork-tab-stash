@@ -67,6 +67,20 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 - **Status:** not started. It's new functionality, so its commit ends with
   `[new feature]`, and the maintainer's approval comes first.
 
+### Copy when dragging with Ctrl held
+
+- **What:** dragging tabs, bookmarks or tab groups on the stash list with Ctrl
+  held (Option on macOS) shows a "copy" cursor, and dropping copies them
+  instead of moving them.
+- **Today:** part of this exists. Drags allow both copy and move
+  (`effectAllowed = "copyMove"` in `src/stash-list/dnd-proto.ts`), and a drop
+  whose `dropEffect` is `"copy"` copies the items. Whether the browser
+  reports "copy" for a Ctrl-drag, shows the copy cursor, and copies tab groups
+  as well hasn't been checked; the gap may be small.
+- **Requested:** by the user, 2026-10-14.
+- **Status:** not started; check what's missing first. If it needs new
+  behaviour, the commit ends with `[new feature]`.
+
 ## Fixed in this fork
 
 ### Reloading the tab model loses the focused window
