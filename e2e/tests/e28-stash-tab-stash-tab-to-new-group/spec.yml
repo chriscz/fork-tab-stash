@@ -3,10 +3,11 @@ title: Stashing the Tab Stash tab to a new group creates no folder
 upstream-bug: '"Stash This Tab to a New Group" on the Tab Stash tab creates an empty folder'
 given:
   - Stashing from a menu is set to show nothing, and the stash is empty.
+  - The user stashed Page 1 with "Stash This Tab to a New Group" from its tab menu, so the stash holds one folder with Page 1.
 when:
   - The user picks "Stash This Tab to a New Group" from the stash list's own tab menu.
 then:
-  - No folder appears in the stash.
+  - No further folder appears in the stash.
   - The stash list's tab is still open.
 notes: |
   The menu item runs stash_one_newgroup in src/index.ts. It created a
@@ -21,10 +22,17 @@ notes: |
   click, so the then step waits a fixed second (as E26 does) before
   checking that no folder appeared. Without the fix the folder appears
   well within that second.
+  An empty stash alone would also pass if the click never reached the
+  background. A spec takes one action, so the positive control is a
+  given step instead: the same menu item, picked the same way from Page
+  1's tab menu, must create a folder holding Page 1 before the when
+  step runs. The then step checks that the stash still holds only that
+  folder.
   In Firefox the driver picks the item from the tab's real context menu.
   Chrome doesn't let extensions add to the tab's menu, so there the item
   is in the page's context menu, and the driver sends the menu's click
   event to the service worker with the stash list's tab, as Chrome would.
-  Upstream 622bf3d has the same code. Without the fix, "No folder appears
-  in the stash" fails with one empty saved-... folder. Removing the fix's
-  early return is the mutation check, with the same result.
+  Upstream 622bf3d has the same code. Without the fix, "No further folder
+  appears in the stash" fails with a second, empty saved-... folder.
+  Removing the fix's early return is the mutation check, with the same
+  result.
