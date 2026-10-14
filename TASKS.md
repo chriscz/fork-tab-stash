@@ -83,6 +83,33 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 
 ## Fixed in this fork
 
+### Showing Tab Stash fails once focus leaves the browser
+
+- **Where:** `src/index.ts`, `commands.show_tab` and `show_setup_page()`,
+  through `Model.restoreTabs()` in `src/model/index.ts`.
+- **What:** the commands that show Tab Stash from the background (the
+  toolbar button, the tab and page menus, the address bar's page action and
+  the first-run setup page) opened it with `restoreTabs()`, which always
+  used the tab model's `targetWindow`. In the background that is the window
+  that last had focus, and it becomes `undefined` when the browser sends
+  `windows.onFocusChanged` with `WINDOW_ID_NONE`, e.g. when focus moves to
+  DevTools or another app. The clicked tab's window was never used.
+- **Effect:** after focus has left the browser, "Show Stashed Tabs" and a
+  toolbar button set to show a tab do nothing, and the background logs
+  `Error: No target window; not sure where to restore tabs`, until a window
+  gets focus again. Upstream `622bf3d` has the same code. By reading,
+  Firefox is affected the same way where it sends `WINDOW_ID_NONE`, but
+  closing a second window in headless Firefox gives the first window focus
+  again, so it wasn't reproduced there.
+- **Found:** reported by the user on Chrome and Brave, 2026-10-14, with the
+  stack `src/index.ts:357` (the toolbar's `onClicked`) → `show_tab`
+  (`:225`) → `restoreTabs` (`src/model/index.ts:723`). Reproduced in
+  headless Chrome by opening a second window and closing it, after which
+  Chrome reports `WINDOW_ID_NONE` and gives no window focus.
+- **Fix:** this commit, which gives `restoreTabs()` a `toWindow` option and
+  has those commands pass the window of the tab the user clicked from. E24
+  checks the toolbar button on Chrome.
+
 ### Reloading the tab model loses the focused window
 
 - **Where:** `src/model/tabs.ts`, `Model.reload()`.

@@ -707,6 +707,10 @@ export class Model {
       /** Should tabs be opened in the background? */
       background?: boolean;
 
+      /** The window to restore into, if not the target window (e.g. the
+       * window whose toolbar button or menu the user clicked). */
+      toWindow?: Tabs.Window;
+
       /** Run this function after restoring tabs, but before closing the active
        * new tab (if any).  This hook exists in case Tab Stash is itself the
        * active new tab--in which case, this function never returns.
@@ -718,7 +722,7 @@ export class Model {
       ) => Promise<void>;
     },
   ): Promise<(Tabs.TabGroupExtent | Tabs.Tab)[]> {
-    const toWindow = this.tabs.targetWindow.value;
+    const toWindow = options.toWindow ?? this.tabs.targetWindow.value;
     if (toWindow === undefined) {
       throw new Error(`No target window; not sure where to restore tabs`);
     }

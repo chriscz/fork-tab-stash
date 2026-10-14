@@ -202,10 +202,10 @@ logErrorsFrom(async () => {
     // Also note that some browsers don't support the sidebar at all; in these
     // cases, we open the tab instead.
 
-    show_sidebar_or_tab: () =>
+    show_sidebar_or_tab: (t?: Tab) =>
       browser.sidebarAction
         ? browser.sidebarAction.open().catch(console.log)
-        : commands.show_tab(),
+        : commands.show_tab(t),
 
     async show_popup() {
       // Ugh, this hack where we set and then clear the popup is necessary
@@ -223,7 +223,7 @@ logErrorsFrom(async () => {
       }
     },
 
-    async show_tab() {
+    async show_tab(tab?: Tab) {
       await model.restoreTabs(
         [
           {
@@ -231,17 +231,17 @@ logErrorsFrom(async () => {
             url: browser.runtime.getURL("stash-list.html"),
           },
         ],
-        {},
+        {toWindow: tab?.flattenedPosition?.parent},
       );
     },
 
     async stash_all(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       await stash_something({what: "all", copy: false, tab});
     },
 
     async stash_pinned(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       if (!tab || tab.flattenedPosition === undefined) return;
       const pinnedTabs = model.pinnedTabsInWindow(tab.flattenedPosition.parent);
       if (pinnedTabs.length === 0) return;
@@ -252,12 +252,12 @@ logErrorsFrom(async () => {
     },
 
     async stash_one(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       await stash_something({what: "single", copy: false, tab});
     },
 
     async stash_one_newgroup(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       if (!tab) return;
       await model.putItemsInFolder({
         items: [tab],
@@ -266,12 +266,12 @@ logErrorsFrom(async () => {
     },
 
     async copy_all(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       await stash_something({what: "all", copy: true, tab});
     },
 
     async copy_one(tab?: Tab) {
-      show_something(model.options.sync.state.open_stash_in);
+      show_something(model.options.sync.state.open_stash_in, tab);
       await stash_something({what: "single", copy: true, tab});
     },
 
@@ -283,13 +283,13 @@ logErrorsFrom(async () => {
   // Shows the Tab Stash UI in the manner requested by /show_what/.  NOTE that to
   // be able to open the sidebar, this function must be invoked in a
   // user-initiated event handler context BEFORE any async operations are done.
-  function show_something(show_what?: ShowWhatOpt) {
+  function show_something(show_what?: ShowWhatOpt, tab?: Tab) {
     switch (show_what) {
       case "none":
         break;
 
       case "tab":
-        model.attempt(commands.show_tab);
+        model.attempt(() => commands.show_tab(tab));
         break;
 
       case "popup":
@@ -297,11 +297,11 @@ logErrorsFrom(async () => {
         break;
 
       case "sidebar":
-        model.attempt(commands.show_sidebar_or_tab);
+        model.attempt(() => commands.show_sidebar_or_tab(tab));
         break;
 
       default:
-        show_setup_page();
+        show_setup_page(tab);
         break;
     }
   }
@@ -333,7 +333,7 @@ logErrorsFrom(async () => {
     }
   }
 
-  function show_setup_page() {
+  function show_setup_page(tab?: Tab) {
     model.attempt(() =>
       model.restoreTabs(
         [
@@ -342,7 +342,7 @@ logErrorsFrom(async () => {
             url: browser.runtime.getURL("setup.html"),
           },
         ],
-        {},
+        {toWindow: tab?.flattenedPosition?.parent},
       ),
     );
   }
@@ -386,18 +386,16 @@ logErrorsFrom(async () => {
     model.options.sync.onChanged.addListener(setupPopup);
 
     browserWakeEvents.browserActionClicked.handle(
-      asyncEvent(async tab => {
+      asyncEvent(async browserTab => {
         const opts = model.options.sync.state;
+        const tab = model.tabs.tab(browserTab.id!);
         // Special case so the user doesn't think Tab Stash is broken
         if (!opts.browser_action_show || !opts.browser_action_stash) {
-          show_setup_page();
+          show_setup_page(tab);
           return;
         }
-        show_something(opts.browser_action_show);
-        await stash_something({
-          what: opts.browser_action_stash,
-          tab: model.tabs.tab(tab.id!)!,
-        });
+        show_something(opts.browser_action_show, tab);
+        await stash_something({what: opts.browser_action_stash, tab});
       }),
     );
   }
@@ -407,7 +405,7 @@ logErrorsFrom(async () => {
       asyncEvent(async tab => {
         if (!model.options.sync.state.open_stash_in) {
           // User hasn't decided what this button should do yet
-          show_setup_page();
+          show_setup_page(model.tabs.tab(tab.id!));
           return;
         }
         commands.stash_one(model.tabs.tab(tab.id));
