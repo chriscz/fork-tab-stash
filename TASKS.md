@@ -83,6 +83,24 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 
 ## Fixed in this fork
 
+### Chrome's Errors page loses where an error was raised
+
+- **Where:** `src/util/oops.ts`, `logError()`.
+- **What:** `logError()` logged an error with `console.error(error)`. For an
+  error object, Chrome's extension Errors page (`chrome://extensions`) keeps
+  only the error's message and the frame of the `console.error()` call, not
+  the error's own stack.
+- **Effect:** every error Tab Stash logs on Chrome shows on the Errors page
+  as coming from the same line in `logError()`, so the page doesn't say
+  where the error was raised. Upstream `622bf3d` has the same code.
+- **Found:** investigating the user's report of "No target window" on Chrome
+  and Brave, 2026-10-14. Reading the Errors page's entries through
+  `chrome.developerPrivate.getExtensionInfo()` showed only the message and
+  `index.js` line 3399 (the bundled `console.error()` call).
+- **Fix:** this commit, which also logs the error's stack as text, so the
+  Errors page entry carries the frames. The error object is still logged
+  first, so consoles that show it as an object keep doing so.
+
 ### Showing Tab Stash fails once focus leaves the browser
 
 - **Where:** `src/index.ts`, `commands.show_tab` and `show_setup_page()`,
