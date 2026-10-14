@@ -52,6 +52,17 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   tab group, named after the sub-folder.
 - **Why:** it keeps the stash's structure when tabs come back, on browsers
   with tab groups.
+- **Today:** "Stash all" saves each open tab group as a sub-folder named after
+  it. Restoring the parent folder opens only its direct bookmarks and skips
+  the sub-folders, with or without Shift, on Chrome and Firefox alike
+  (`restoreAll()` and `restoreAndRemove()` pass `leafChildren` to
+  `restoreTabs()`, `src/stash-list/folder.vue`). Upstream `622bf3d` does the
+  same, and it looks deliberate: restore-and-remove's tooltip changes when a
+  folder has sub-folders. Restoring a sub-folder on its own with Shift does
+  recreate its group, without its colour, which bookmarks don't store.
+- **Starting point:** `putItemsInWindow()` already turns a folder into a tab
+  group and its sub-folders into neighbouring groups titled "Parent > Sub"
+  (`createTreeInWindow` in `src/model/index.ts`).
 - **Requested:** by the user while testing tab groups on Chrome, 2026-10-14.
 - **Status:** not started. It's new functionality, so its commit ends with
   `[new feature]`, and the maintainer's approval comes first.
