@@ -43,6 +43,19 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   `setupPopup()` wants (the popup's URL while `browser_action_show` is
   `"popup"`, otherwise `""`) instead of always clearing it.
 
+## Feature requests
+
+### Restore nested folders as their own tab groups
+
+- **What:** when a stashed folder holds sub-folders, restoring it (or
+  Shift-restoring it into a tab group) could open each sub-folder as its own
+  tab group, named after the sub-folder.
+- **Why:** it keeps the stash's structure when tabs come back, on browsers
+  with tab groups.
+- **Requested:** by the user while testing tab groups on Chrome, 2026-10-14.
+- **Status:** not started. It's new functionality, so its commit ends with
+  `[new feature]`, and the maintainer's approval comes first.
+
 ## Fixed in this fork
 
 ### Chrome rejects dotted plural message keys

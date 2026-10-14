@@ -61,6 +61,9 @@ Changes should be minimally intrusive and build on what is already there.
   `fix(rfc-0002): close hidden tabs of newly stashed bookmarks [pre-existing]`.
   If the fix changes what the user sees, it comes with an end-to-end test;
   otherwise a unit regression test.
+- New functionality, as opposed to fixes and compatibility changes, ends its
+  subject with `[new feature]`, e.g.
+  `feat: restore nested folders as their own tab groups [new feature]`.
 - Build commits as a Gerrit-style stack: each commit is one coherent change that
   builds, passes `make`, and delivers value on its own. Order the stack so any
   prefix of it could land without the rest.
