@@ -103,5 +103,6 @@ RFCs live in [rfcs/](rfcs/).
 | ---- | ---------------------------------------------------------- | ------ |
 | 0001 | Support Google Chrome via a generated Manifest V3 manifest | draft  |
 | 0002 | A Firefox-baseline end-to-end test suite                   | draft  |
+| 0003 | Use Chrome's side panel as Tab Stash's sidebar             | draft  |
 
 <!-- rfc-index:end -->
