@@ -258,7 +258,8 @@ logErrorsFrom(async () => {
 
     async stash_one_newgroup(tab?: Tab) {
       show_something(model.options.sync.state.open_stash_in, tab);
-      if (!tab) return;
+      // putItemsInFolder() would skip this tab and leave the folder empty.
+      if (!tab || !model.isTabStashable(tab)) return;
       await model.putItemsInFolder({
         items: [tab],
         toFolder: await model.createStashFolder(),

@@ -257,6 +257,20 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
   `Model.isTabStashable()` so it skips exactly what `putItemsInFolder()`
   skips. E27 checks it.
 
+### "Stash This Tab to a New Group" on the Tab Stash tab creates an empty folder
+
+- **Where:** `stash_one_newgroup` in `src/index.ts` (the tab and page
+  menus' "Stash This Tab to a New Group").
+- **What:** it created a folder and then passed the clicked tab to
+  `putItemsInFolder()`, which skips the Tab Stash page's own tab (and hidden
+  tabs). Upstream `622bf3d` has the same code.
+- **Effect:** picking the item from the Tab Stash page's own tab menu adds a
+  new, empty folder to the stash.
+- **Found:** review of the "nothing to stash" fix, 2026-10-14. Reproduced
+  with E28 in Firefox and Chrome; each made one empty `saved-…` folder.
+- **Fix:** this commit, which returns before creating the folder unless
+  `Model.isTabStashable()` says the tab would be stashed. E28 checks it.
+
 ### Alt-clicking "Stash all" copies the Tab Stash page too
 
 - **Where:** `copying()` in `src/model/index.ts`, used by `stash()` in

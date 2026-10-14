@@ -1,0 +1,30 @@
+id: E28
+title: Stashing the Tab Stash tab to a new group creates no folder
+upstream-bug: '"Stash This Tab to a New Group" on the Tab Stash tab creates an empty folder'
+given:
+  - Stashing from a menu is set to show nothing, and the stash is empty.
+when:
+  - The user picks "Stash This Tab to a New Group" from the stash list's own tab menu.
+then:
+  - No folder appears in the stash.
+  - The stash list's tab is still open.
+notes: |
+  The menu item runs stash_one_newgroup in src/index.ts. It created a
+  folder and then passed the clicked tab to putItemsInFolder(), which
+  skips the Tab Stash page's own tab, so the click made an empty folder.
+  The fix returns before creating the folder unless
+  Model.isTabStashable() says putItemsInFolder() would stash the tab.
+  "show nothing" (open_stash_in "none") keeps the click to the stash
+  alone: otherwise Firefox would open the sidebar and Chrome would switch
+  to the stash list's tab.
+  Nothing tells the test that the background has finished with the
+  click, so the then step waits a fixed second (as E26 does) before
+  checking that no folder appeared. Without the fix the folder appears
+  well within that second.
+  In Firefox the driver picks the item from the tab's real context menu.
+  Chrome doesn't let extensions add to the tab's menu, so there the item
+  is in the page's context menu, and the driver sends the menu's click
+  event to the service worker with the stash list's tab, as Chrome would.
+  Upstream 622bf3d has the same code. Without the fix, "No folder appears
+  in the stash" fails with one empty saved-... folder. Removing the fix's
+  early return is the mutation check, with the same result.
