@@ -69,6 +69,20 @@ upstream. Fixes stay small and separate, one issue or PR per bug.
 
 ## Fixed in this fork
 
+### Reloading the tab model loses the focused window
+
+- **Where:** `src/model/tabs.ts`, `Model.reload()`.
+- **What:** `reload()` set `focusedWindow` to the bare window ID. Only
+  `whenWindowCreated()` swaps the ID for the `Window` object, and it doesn't
+  run again for a window already in the model, so `targetWindow` stayed
+  `undefined`.
+- **Effect:** after Tab Stash recovers from an error by reloading, it has no
+  target window, so commands that show Tab Stash from the background fail
+  until the focus changes. Upstream `622bf3d` has the same code.
+- **Found:** debugging the Chrome toolbar and tab menu bugs found by hand,
+  2026-10-14.
+- **Fix:** this commit, which uses the model's `Window` when it already has one.
+
 ### Chrome rejects dotted plural message keys
 
 - **Where:** `assets/_locales/{en,ru}/messages.json`, `src/util/i18n.ts`,

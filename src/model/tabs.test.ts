@@ -610,6 +610,20 @@ describe("model/tabs", () => {
     expect(model.tab(tabs.left_charlotte.id)!.active).to.equal(true);
   });
 
+  it("keeps the focused window as the target after reloading", async () => {
+    // A background model has no initial window, so its target window is the
+    // focused one.
+    const bg = await M.Model.from_browser("background");
+    const cur = await browser.windows.getCurrent();
+    expect(bg.targetWindow.value).to.equal(bg.window(cur.id!));
+
+    // The current window is already in the model, so reloading must not leave
+    // just its ID behind.
+    await bg.reload();
+    expect(bg.targetWindow.value).to.not.be.undefined;
+    expect(bg.targetWindow.value).to.equal(bg.window(cur.id!));
+  });
+
   describe("refocusAwayFromTabs()", () => {
     function test(options: {
       window: keyof TabFixture["windows"];

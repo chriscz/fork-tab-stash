@@ -284,7 +284,11 @@ export class Model {
       trace("(Re-)loading the model");
 
       const cur_win = await browser.windows.getCurrent();
-      this.focusedWindow.value = cur_win.id as WindowID;
+      // The window may already be in the model (e.g. when reloading to
+      // recover from an error), in which case whenWindowCreated() won't run
+      // again to swap the ID for the window object.
+      this.focusedWindow.value =
+        this.window(cur_win.id!) ?? (cur_win.id as WindowID);
 
       let tabs = await browser.tabs.query({});
 
